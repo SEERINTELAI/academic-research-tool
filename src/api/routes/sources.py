@@ -24,6 +24,7 @@ from src.services.semantic_scholar import (
     SemanticScholarClient,
     SemanticScholarError,
 )
+from src.services.pdf_processor import PDFProcessor, PDFProcessorError
 
 logger = logging.getLogger(__name__)
 
@@ -330,5 +331,111 @@ async def delete_source(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {str(e)}",
+        )
+
+
+@router.post(
+    "/{source_id}/process",
+    response_model=SourceResponse,
+    summary="Process source PDF",
+    description="Download PDF and parse with GROBID. Prepares source for RAG ingestion.",
+)
+async def process_source_pdf(
+    project_id: UUID,
+    source_id: UUID,
+    user: CurrentUser,
+    db: DatabaseDep,
+    force: bool = Query(False, description="Force reprocessing even if already processed"),
+) -> SourceResponse:
+    """
+    Process a source's PDF.
+    
+    Downloads the PDF, parses it with GROBID to extract structure,
+    and updates source metadata. After processing, the source is
+    ready for chunking and ingestion to Hyperion.
+    """
+    # Check source exists and belongs to project
+    result = db.table("source")\
+        .select("*")\
+        .eq("id", str(source_id))\
+        .eq("project_id", str(project_id))\
+        .maybe_single()\
+        .execute()
+    
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source not found",
+        )
+    
+    source = result.data
+    
+    # Check if already processed
+    if not force and source.get("ingestion_status") in [
+        IngestionStatus.READY.value,
+        IngestionStatus.INGESTING.value,
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Source already processed. Use force=true to reprocess.",
+        )
+    
+    # Check if source has PDF URL or arXiv ID
+    if not source.get("pdf_url") and not source.get("arxiv_id") and not source.get("doi"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source has no PDF URL, arXiv ID, or DOI for download",
+        )
+    
+    try:
+        processor = PDFProcessor()
+        parsed = await processor.process_source(source_id)
+        
+        logger.info(
+            f"Processed source {source_id}: "
+            f"{parsed.title}, {len(parsed.sections)} sections"
+        )
+        
+        # Fetch updated source
+        updated = db.table("source")\
+            .select("*")\
+            .eq("id", str(source_id))\
+            .single()\
+            .execute()
+        
+        row = updated.data
+        authors = [Author(**a) for a in (row.get("authors") or [])]
+        
+        return SourceResponse(
+            id=row["id"],
+            project_id=row["project_id"],
+            doi=row.get("doi"),
+            arxiv_id=row.get("arxiv_id"),
+            semantic_scholar_id=row.get("semantic_scholar_id"),
+            title=row["title"],
+            authors=authors,
+            abstract=row.get("abstract"),
+            publication_year=row.get("publication_year"),
+            journal=row.get("journal"),
+            pdf_url=row.get("pdf_url"),
+            ingestion_status=row["ingestion_status"],
+            hyperion_doc_name=row.get("hyperion_doc_name"),
+            chunk_count=row.get("chunk_count", 0),
+            error_message=row.get("error_message"),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        
+    except PDFProcessorError as e:
+        logger.error(f"PDF processing failed for {source_id}: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"PDF processing failed: {e.message}",
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error processing {source_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing error: {str(e)}",
         )
 

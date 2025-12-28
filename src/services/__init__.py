@@ -28,6 +28,20 @@ from src.services.semantic_scholar import (
     SemanticScholarError,
     search_papers,
 )
+from src.services.grobid_client import (
+    GrobidClient,
+    GrobidError,
+    ParsedPaper,
+    Section,
+    SectionType,
+    parse_pdf,
+)
+from src.services.pdf_processor import (
+    PDFProcessor,
+    PDFProcessorError,
+    process_source,
+    download_and_parse_pdf,
+)
 
 __all__ = [
     # Database
@@ -52,5 +66,17 @@ __all__ = [
     "SemanticScholarClient",
     "SemanticScholarError",
     "search_papers",
+    # GROBID
+    "GrobidClient",
+    "GrobidError",
+    "ParsedPaper",
+    "Section",
+    "SectionType",
+    "parse_pdf",
+    # PDF Processor
+    "PDFProcessor",
+    "PDFProcessorError",
+    "process_source",
+    "download_and_parse_pdf",
 ]
 
