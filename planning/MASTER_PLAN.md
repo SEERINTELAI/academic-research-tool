@@ -127,12 +127,13 @@ Wave 0: Pre-requisites ✅
 ├── RAG Test Suite ✅
 └── Decision Gate ✅
 
-Wave 1: Foundation (Current)
+Wave 1: Foundation ✅
 ├── Create Repository ✅
 ├── Planning Infrastructure ✅
 ├── tasks.json ✅
 ├── Validate Hyperion with credentials ✅
 ├── Set up Supabase schema ✅
+├── FastAPI project structure ✅
 └── Connect Hyperion RAG to AlphaKernel ✅
 
 Wave 2: Core Pipeline
