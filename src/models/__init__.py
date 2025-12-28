@@ -37,6 +37,17 @@ from src.models.hyperion import (
     ChunkReference,
     DeleteResult,
 )
+from src.models.source import (
+    Author,
+    IngestionStatus,
+    PaperSearchRequest,
+    PaperSearchResult,
+    PaperSearchResponse,
+    SourceCreate,
+    SourceResponse,
+    SourceListItem,
+    SourceIngestRequest,
+)
 
 __all__ = [
     # Common
@@ -68,5 +79,15 @@ __all__ = [
     "QueryResult",
     "ChunkReference",
     "DeleteResult",
+    # Source
+    "Author",
+    "IngestionStatus",
+    "PaperSearchRequest",
+    "PaperSearchResult",
+    "PaperSearchResponse",
+    "SourceCreate",
+    "SourceResponse",
+    "SourceListItem",
+    "SourceIngestRequest",
 ]
 

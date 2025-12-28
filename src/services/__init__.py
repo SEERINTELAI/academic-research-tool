@@ -23,6 +23,11 @@ from src.services.hyperion_client import (
     hyperion_ingest,
     hyperion_delete,
 )
+from src.services.semantic_scholar import (
+    SemanticScholarClient,
+    SemanticScholarError,
+    search_papers,
+)
 
 __all__ = [
     # Database
@@ -43,5 +48,9 @@ __all__ = [
     "hyperion_query",
     "hyperion_ingest",
     "hyperion_delete",
+    # Semantic Scholar
+    "SemanticScholarClient",
+    "SemanticScholarError",
+    "search_papers",
 ]
 
