@@ -35,7 +35,7 @@ Collaborative research outline structuring with AI assistance.
 
 | ID | Feature | Status | Priority |
 |----|---------|--------|----------|
-| AR1.1 | Create Project with Outline | 🔜 pending | P0 |
+| AR1.1 | Create Project with Outline | ✅ complete | P0 |
 | AR1.2 | AI-Assisted Section Generation | 🔜 pending | P1 |
 | AR1.3 | Research Question Formulation | 🔜 pending | P1 |
 | AR1.4 | Outline-to-Structure Conversion | 🔜 pending | P2 |
