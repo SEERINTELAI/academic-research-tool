@@ -156,82 +156,38 @@ Chunk retrieved → Create citation record
 
 ## Data Model
 
-### Core Entities
+See **[planning/DATABASE_SCHEMA.md](planning/DATABASE_SCHEMA.md)** for complete schema documentation.
 
-```sql
--- Project: Container for research
-CREATE TABLE project (
-    id UUID PRIMARY KEY,
-    title TEXT NOT NULL,
-    abstract TEXT,
-    owner_id UUID,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
+### Core Tables
 
--- Outline: Research structure
-CREATE TABLE outline (
-    id UUID PRIMARY KEY,
-    project_id UUID REFERENCES project(id),
-    sections JSONB,  -- Nested section structure
-    research_questions JSONB
-);
+| Table | Purpose |
+|-------|---------|
+| `project` | Research project container |
+| `outline_section` | Hierarchical outline with questions |
+| `source` | Academic papers with ingestion status |
+| `chunk` | Pointers to Hyperion/LightRAG chunks |
+| `synthesis` | RAG query results with attribution |
+| `report_block` | Document content blocks |
+| `report_block_history` | Automatic version snapshots |
+| `citation` | APA citations with provenance |
 
--- Source: Academic paper
-CREATE TABLE source (
-    id UUID PRIMARY KEY,
-    project_id UUID REFERENCES project(id),
-    doi TEXT UNIQUE,
-    title TEXT NOT NULL,
-    authors JSONB,
-    abstract TEXT,
-    publication_date DATE,
-    venue TEXT,
-    pdf_url TEXT,
-    metadata JSONB
-);
+### Key Relationships
 
--- Chunk: Indexed text chunk
-CREATE TABLE chunk (
-    id UUID PRIMARY KEY,
-    source_id UUID REFERENCES source(id),
-    content TEXT NOT NULL,
-    section_type TEXT,  -- abstract, methods, results, etc.
-    page_number INT,
-    lightrag_id TEXT,  -- Reference to LightRAG
-    metadata JSONB
-);
+```
+Citation Provenance:
+  report_block → citation → chunk → source → PDF page
 
--- Synthesis: Query response
-CREATE TABLE synthesis (
-    id UUID PRIMARY KEY,
-    project_id UUID REFERENCES project(id),
-    query TEXT NOT NULL,
-    response TEXT NOT NULL,
-    chunk_ids UUID[],  -- Sources used
-    created_at TIMESTAMPTZ
-);
+Synthesis Attribution:
+  synthesis.chunk_ids[] → chunk[] → source[]
 
--- Citation: In-document reference
-CREATE TABLE citation (
-    id UUID PRIMARY KEY,
-    synthesis_id UUID REFERENCES synthesis(id),
-    chunk_id UUID REFERENCES chunk(id),
-    in_text_format TEXT,  -- e.g., "(Smith, 2024)"
-    full_reference TEXT,
-    position_in_doc JSONB,
-    created_at TIMESTAMPTZ
-);
+Outline Structure:
+  outline_section.parent_id → outline_section (tree)
+```
 
--- Report: Written document
-CREATE TABLE report (
-    id UUID PRIMARY KEY,
-    project_id UUID REFERENCES project(id),
-    content TEXT,
-    version INT,
-    citations JSONB,
-    created_at TIMESTAMPTZ
-);
+### Migration
+
+```
+supabase/migrations/001_initial_schema.sql
 ```
 
 ## API Endpoints

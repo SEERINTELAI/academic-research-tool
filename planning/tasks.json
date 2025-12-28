@@ -2,7 +2,7 @@
   "metadata": {
     "project": "academic-research-tool",
     "version": "1.0.0",
-    "last_updated": "2025-12-28",
+    "last_updated": "2025-12-28T20:30:00Z",
     "description": "AI-powered academic research tool task queue"
   },
   "tasks": [
@@ -10,7 +10,9 @@
       "id": 1,
       "title": "Validate Hyperion with credentials",
       "description": "Get Hyperion/LightRAG credentials and run full integration tests to validate CRUD operations work correctly. Update AK_RAG_VALIDATION.md with results.",
-      "status": "pending",
+      "status": "completed",
+      "completed_at": "2025-12-28T20:15:00Z",
+      "notes": "Validated via AK MCP. Fixed ingest_multiple_knowledge param mismatch (text→texts). See Event_Router/planning/AK_RAG_TEST_RESULTS.md",
       "priority": "P0",
       "wave": 1,
       "feature_id": null,
@@ -32,7 +34,9 @@
       "id": 2,
       "title": "Set up Supabase project and schema",
       "description": "Create Supabase project for academic-research-tool. Set up initial schema with project, source, chunk, synthesis, and citation tables. Configure RLS policies.",
-      "status": "pending",
+      "status": "completed",
+      "completed_at": "2025-12-28T20:30:00Z",
+      "notes": "Migration created: supabase/migrations/001_initial_schema.sql. Schema documented in planning/DATABASE_SCHEMA.md. Includes 8 tables, triggers for versioning, APA citation helper function.",
       "priority": "P0",
       "wave": 1,
       "feature_id": null,

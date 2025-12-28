@@ -128,10 +128,12 @@ Wave 0: Pre-requisites ✅
 └── Decision Gate ✅
 
 Wave 1: Foundation (Current)
-├── Create Repository ⏳
-├── Planning Infrastructure ⏳
-├── tasks.json ⏳
-└── Validate Hyperion with credentials
+├── Create Repository ✅
+├── Planning Infrastructure ✅
+├── tasks.json ✅
+├── Validate Hyperion with credentials ✅
+├── Set up Supabase schema ✅
+└── Connect Hyperion RAG to AlphaKernel ✅
 
 Wave 2: Core Pipeline
 ├── 2a: Outline (AR1.1, AR1.2)
@@ -181,16 +183,20 @@ Wave 4: Polish
 
 ### Database Schema
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for full schema.
+See **[DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)** for full schema documentation.
 
-Key tables:
-- `project` - Research project container
-- `outline` - Section structure
-- `source` - Ingested papers
-- `chunk` - Indexed text chunks
-- `synthesis` - Query responses
-- `citation` - In-document references
-- `report` - Written document
+| Table | Purpose |
+|-------|---------|
+| `project` | Research project container |
+| `outline_section` | Hierarchical outline with questions |
+| `source` | Academic papers with ingestion status |
+| `chunk` | Pointers to Hyperion/LightRAG chunks |
+| `synthesis` | RAG query results with attribution |
+| `report_block` | Document content blocks |
+| `report_block_history` | Automatic version snapshots |
+| `citation` | APA citations with provenance |
+
+**Migration**: `supabase/migrations/001_initial_schema.sql`
 
 ---
 
