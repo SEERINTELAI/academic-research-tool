@@ -27,6 +27,16 @@ from src.models.outline import (
     OutlineTree,
     SectionType,
 )
+from src.models.hyperion import (
+    HyperionDocument,
+    HyperionDocumentList,
+    IngestRequest,
+    IngestResult,
+    QueryRequest,
+    QueryResult,
+    ChunkReference,
+    DeleteResult,
+)
 
 __all__ = [
     # Common
@@ -49,5 +59,14 @@ __all__ = [
     "OutlineSectionWithChildren",
     "OutlineTree",
     "SectionType",
+    # Hyperion
+    "HyperionDocument",
+    "HyperionDocumentList",
+    "IngestRequest",
+    "IngestResult",
+    "QueryRequest",
+    "QueryResult",
+    "ChunkReference",
+    "DeleteResult",
 ]
 
