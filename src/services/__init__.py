@@ -56,6 +56,13 @@ from src.services.query_service import (
     QueryError,
     query_project,
 )
+from src.services.discovery import (
+    DiscoveryService,
+    RelationType,
+    discover_references,
+    discover_citations,
+    explore_knowledge_tree,
+)
 
 __all__ = [
     # Database
@@ -103,5 +110,11 @@ __all__ = [
     "QueryService",
     "QueryError",
     "query_project",
+    # Discovery
+    "DiscoveryService",
+    "RelationType",
+    "discover_references",
+    "discover_citations",
+    "explore_knowledge_tree",
 ]
 
