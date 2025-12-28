@@ -46,6 +46,11 @@ from src.services.chunker import (
     Chunker,
     chunk_paper,
 )
+from src.services.ingestion import (
+    IngestionService,
+    IngestionError,
+    ingest_source as ingest_source_to_rag,
+)
 
 __all__ = [
     # Database
@@ -85,5 +90,9 @@ __all__ = [
     # Chunker
     "Chunker",
     "chunk_paper",
+    # Ingestion
+    "IngestionService",
+    "IngestionError",
+    "ingest_source_to_rag",
 ]
 

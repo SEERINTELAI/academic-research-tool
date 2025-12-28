@@ -25,6 +25,7 @@ from src.services.semantic_scholar import (
     SemanticScholarError,
 )
 from src.services.pdf_processor import PDFProcessor, PDFProcessorError
+from src.services.ingestion import IngestionService, IngestionError
 
 logger = logging.getLogger(__name__)
 
@@ -437,5 +438,64 @@ async def process_source_pdf(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Processing error: {str(e)}",
+        )
+
+
+@router.post(
+    "/{source_id}/ingest",
+    summary="Ingest source to RAG",
+    description="Full ingestion pipeline: download PDF, parse, chunk, and ingest to Hyperion.",
+)
+async def ingest_source(
+    project_id: UUID,
+    source_id: UUID,
+    user: CurrentUser,
+    db: DatabaseDep,
+    force: bool = Query(False, description="Force re-ingestion even if already processed"),
+) -> dict:
+    """
+    Ingest a source into the RAG system.
+    
+    Full pipeline:
+    1. Download PDF (from arXiv, Unpaywall, or direct URL)
+    2. Parse with GROBID (extract sections, references)
+    3. Chunk by sections with metadata
+    4. Ingest chunks to Hyperion
+    5. Store chunk references
+    
+    The source will be ready for RAG queries after completion.
+    """
+    # Verify source exists and belongs to project
+    result = db.table("source")\
+        .select("id")\
+        .eq("id", str(source_id))\
+        .eq("project_id", str(project_id))\
+        .maybe_single()\
+        .execute()
+    
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source not found",
+        )
+    
+    try:
+        service = IngestionService()
+        ingestion_result = await service.ingest_source(source_id, force)
+        
+        logger.info(f"Ingested source {source_id}: {ingestion_result}")
+        return ingestion_result
+        
+    except IngestionError as e:
+        logger.error(f"Ingestion failed for {source_id} at stage {e.stage}: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Ingestion failed ({e.stage}): {e.message}",
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected ingestion error for {source_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ingestion error: {str(e)}",
         )
 
