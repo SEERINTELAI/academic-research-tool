@@ -51,6 +51,11 @@ from src.services.ingestion import (
     IngestionError,
     ingest_source as ingest_source_to_rag,
 )
+from src.services.query_service import (
+    QueryService,
+    QueryError,
+    query_project,
+)
 
 __all__ = [
     # Database
@@ -94,5 +99,9 @@ __all__ = [
     "IngestionService",
     "IngestionError",
     "ingest_source_to_rag",
+    # Query
+    "QueryService",
+    "QueryError",
+    "query_project",
 ]
 

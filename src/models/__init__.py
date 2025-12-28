@@ -57,6 +57,16 @@ from src.models.chunk import (
     ChunkForIngestion,
     ChunkerConfig,
 )
+from src.models.research import (
+    QueryMode,
+    CitationStyle,
+    SourceReference,
+    QueryRequest as ResearchQueryRequest,
+    QueryResponse as ResearchQueryResponse,
+    SynthesisCreate,
+    SynthesisResponse,
+    SynthesisListItem,
+)
 
 __all__ = [
     # Common
@@ -106,5 +116,14 @@ __all__ = [
     "ChunkWithContext",
     "ChunkForIngestion",
     "ChunkerConfig",
+    # Research
+    "QueryMode",
+    "CitationStyle",
+    "SourceReference",
+    "ResearchQueryRequest",
+    "ResearchQueryResponse",
+    "SynthesisCreate",
+    "SynthesisResponse",
+    "SynthesisListItem",
 ]
 
