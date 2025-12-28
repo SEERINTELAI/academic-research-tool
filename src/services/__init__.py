@@ -42,6 +42,10 @@ from src.services.pdf_processor import (
     process_source,
     download_and_parse_pdf,
 )
+from src.services.chunker import (
+    Chunker,
+    chunk_paper,
+)
 
 __all__ = [
     # Database
@@ -78,5 +82,8 @@ __all__ = [
     "PDFProcessorError",
     "process_source",
     "download_and_parse_pdf",
+    # Chunker
+    "Chunker",
+    "chunk_paper",
 ]
 

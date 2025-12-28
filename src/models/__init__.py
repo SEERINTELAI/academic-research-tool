@@ -48,6 +48,15 @@ from src.models.source import (
     SourceListItem,
     SourceIngestRequest,
 )
+from src.models.chunk import (
+    ChunkType,
+    ChunkMetadata,
+    ChunkCreate,
+    ChunkResponse,
+    ChunkWithContext,
+    ChunkForIngestion,
+    ChunkerConfig,
+)
 
 __all__ = [
     # Common
@@ -89,5 +98,13 @@ __all__ = [
     "SourceResponse",
     "SourceListItem",
     "SourceIngestRequest",
+    # Chunk
+    "ChunkType",
+    "ChunkMetadata",
+    "ChunkCreate",
+    "ChunkResponse",
+    "ChunkWithContext",
+    "ChunkForIngestion",
+    "ChunkerConfig",
 ]
 
