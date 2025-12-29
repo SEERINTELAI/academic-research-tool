@@ -88,13 +88,27 @@ SEMANTIC_SCHOLAR_API_KEY=your_key
 ### Running
 
 ```bash
-# Backend
-cd src
-uvicorn main:app --reload
+# Backend (runs on port 8003)
+cd academic-research-tool
+conda activate bizon_mcp
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8003
 
-# Frontend
+# Frontend (runs on port 3000)
 cd frontend
 npm run dev
+```
+
+### Verifying Setup
+
+```bash
+# Check backend health
+curl http://localhost:8003/api/health
+
+# Check system diagnostics
+curl http://localhost:8003/api/health/diagnostics | python3 -m json.tool
+
+# Run connectivity tests
+pytest tests/e2e/test_connectivity.py -v
 ```
 
 ## Project Structure
@@ -167,6 +181,61 @@ The UI has two main tabs per project:
 - [Planning Overview](planning/README.md)
 - [Feature Master Plan](planning/MASTER_PLAN.md)
 - [AK RAG Validation](../../../planning/AK_RAG_DECISION_GATE.md)
+
+## API Testing & Diagnostics
+
+### Test Harness Endpoints
+
+The API provides programmatic testing endpoints at `/api/test/*`:
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/test/create-project` | Create a test project |
+| `POST /api/test/search-papers` | Search for papers |
+| `POST /api/test/ingest-paper` | Ingest a paper to RAG |
+| `POST /api/test/generate-outline` | Generate an outline |
+| `POST /api/test/full-research-flow` | Run complete E2E workflow |
+| `GET /api/test/diagnostics` | Get system health info |
+| `DELETE /api/test/cleanup/{id}` | Clean up test project |
+
+### Diagnostics Endpoint
+
+`GET /api/health/diagnostics` returns:
+- Service health (database, LightRAG, Semantic Scholar)
+- Recent errors (last 100)
+- Request logs (last 100)
+- Configuration info
+
+### Frontend Test Harness
+
+In development mode, access `window.__TEST_HARNESS__` in browser console:
+
+```javascript
+// Get all state
+window.__TEST_HARNESS__.getState()
+
+// Get React Query cache
+window.__TEST_HARNESS__.getQueryCache()
+
+// Get network request history
+window.__TEST_HARNESS__.getNetworkHistory()
+
+// Clear network history
+window.__TEST_HARNESS__.clearNetworkHistory()
+```
+
+### Running Tests
+
+```bash
+# Connectivity tests (always pass even without DB)
+pytest tests/e2e/test_connectivity.py -v
+
+# Full E2E tests (require Supabase)
+pytest tests/e2e/ -v
+
+# All tests
+pytest tests/ -v
+```
 
 ## Contributing
 

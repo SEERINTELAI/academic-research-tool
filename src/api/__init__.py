@@ -6,7 +6,7 @@ This package contains all API routes and dependencies.
 
 from fastapi import APIRouter
 
-from src.api.routes import health, projects, outline, sources, research, discovery, logs, research_agent, chat
+from src.api.routes import health, projects, outline, sources, research, discovery, logs, research_agent, chat, test_harness
 
 # Create main API router
 api_router = APIRouter()
@@ -70,6 +70,12 @@ api_router.include_router(
 api_router.include_router(
     logs.router,
     tags=["logs"],
+)
+
+# Test harness for programmatic testing (dev only)
+api_router.include_router(
+    test_harness.router,
+    tags=["test-harness"],
 )
 
 # Future routes will be added here:

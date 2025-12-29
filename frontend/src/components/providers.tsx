@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { useUIStore } from '@/lib/store';
+import { initTestHarness, instrumentFetch } from '@/lib/test-harness';
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useUIStore((s) => s.theme);
@@ -41,6 +42,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       })
   );
+
+  // Initialize test harness in development mode
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      instrumentFetch();
+      initTestHarness(queryClient);
+    }
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

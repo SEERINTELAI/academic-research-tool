@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+
 function ProjectCard({ project }: { project: Project }) {
   const statusColors: Record<string, string> = {
     draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
@@ -114,9 +115,19 @@ export default function ProjectsPage() {
 
   const { data: projects, isLoading, error } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => api.listProjects(authToken),
+    queryFn: async () => {
+      console.log('[Projects] Fetching projects with token:', authToken);
+      const result = await api.listProjects(authToken);
+      console.log('[Projects] Fetched', result?.length, 'projects');
+      return result;
+    },
     enabled: !!authToken,
+    retry: 1, // Only retry once to avoid appearing stuck
+    retryDelay: 1000, // 1 second between retries
   });
+
+  // Debug logging
+  console.log('[Projects] Render state:', { isLoading, error, projectsCount: projects?.length, authToken });
 
   useEffect(() => {
     if (projects) {
@@ -126,6 +137,12 @@ export default function ProjectsPage() {
 
   return (
     <div className="page-transition p-6">
+      {/* Debug Status Banner - remove after debugging */}
+      <div className="mb-4 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded font-mono">
+        Status: {isLoading ? '⏳ Loading...' : error ? '❌ Error' : `✅ ${projects?.length ?? 0} projects`}
+        {error && <span className="text-red-500 ml-2">{String(error)}</span>}
+      </div>
+      
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="font-serif text-3xl font-bold">Projects</h1>
@@ -144,7 +161,13 @@ export default function ProjectsPage() {
       ) : error ? (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="py-8 text-center">
-            <p className="text-destructive">Failed to load projects. Please try again.</p>
+            <p className="text-destructive font-medium">Failed to load projects</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {error instanceof Error ? error.message : 'An unknown error occurred'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-4">
+              Check that the backend is running at {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}
+            </p>
           </CardContent>
         </Card>
       ) : projects && projects.length > 0 ? (

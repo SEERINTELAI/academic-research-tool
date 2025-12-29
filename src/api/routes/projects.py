@@ -83,6 +83,9 @@ async def list_projects(
     offset: int = Query(0, ge=0),
 ) -> list[ProjectListItem]:
     """List user's projects with optional filtering."""
+    from src.config import get_settings
+    settings = get_settings()
+    
     try:
         query = db.table("project").select("*")
         
@@ -115,6 +118,13 @@ async def list_projects(
         
     except Exception as e:
         logger.exception(f"Error listing projects: {e}")
+        
+        # In development mode with unconfigured database, return empty list
+        # instead of failing so the frontend can still load
+        if settings.is_development and "your-project.supabase.co" in settings.supabase_url:
+            logger.warning("Database not configured - returning empty project list for development")
+            return []
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {str(e)}",

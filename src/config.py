@@ -29,10 +29,17 @@ class Settings(BaseSettings):
     
     # Server
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8003
     
-    # CORS
-    cors_origins: list[str] = Field(default=["http://localhost:3000", "http://127.0.0.1:3000"])
+    # CORS - allow all common development origins
+    cors_origins: list[str] = Field(default=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://192.168.68.61:3000",
+        "http://192.168.68.61:3001",
+    ])
     
     # Supabase
     supabase_url: str = Field(..., description="Supabase project URL")

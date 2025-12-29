@@ -4,8 +4,12 @@
 
 import { logger } from './diagnostics';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
 const apiLogger = logger.scope('API');
+
+// Debug: Log API base on module load
+console.log('[API] API_BASE:', API_BASE);
+console.log('[API] NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
 
 export class APIError extends Error {
   constructor(
