@@ -225,3 +225,51 @@ class ResearchSessionInfo(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+# ============================================================================
+# Library (for Library Tab - Zotero-like view)
+# ============================================================================
+
+class LibraryPaper(BaseModel):
+    """Paper in the library (ingested sources)."""
+    id: UUID  # source.id
+    title: str
+    authors: list[Author] = Field(default_factory=list)
+    year: Optional[int] = None
+    
+    topic: Optional[str] = None
+    topic_confidence: float = 0.0
+    
+    doi: Optional[str] = None
+    journal: Optional[str] = None
+    citation_count: Optional[int] = None
+    
+    ingestion_status: str = "pending"
+    ingested_at: Optional[datetime] = None
+    
+    # For referencing in chat
+    display_index: Optional[int] = None
+
+
+class TopicGroup(BaseModel):
+    """Group of papers by topic for Library view."""
+    topic: str
+    paper_count: int
+    papers: list[LibraryPaper] = Field(default_factory=list)
+    
+    # Expand/collapse state (UI hint)
+    is_expanded: bool = True
+
+
+class LibraryResponse(BaseModel):
+    """Library response with papers grouped by topic."""
+    project_id: UUID
+    
+    topics: list[TopicGroup] = Field(default_factory=list)
+    
+    # Summary stats
+    total_papers: int = 0
+    total_topics: int = 0
+    papers_ingested: int = 0
+    papers_pending: int = 0
+

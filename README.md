@@ -19,7 +19,7 @@ A tight loop between outlining, researching, synthesizing sources, and collabora
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Frontend (Next.js)                      │
-│  - Research Tab (Explore, Knowledge Tree, Outline, Chat)   │
+│  - Research Tab (Explore, Library, Tree, Outline + Chat)    │
 │  - Write Tab (Monaco Editor with AI assist)                 │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -137,12 +137,12 @@ academic-research-tool/
 
 The UI has two main tabs per project:
 
-#### Research Tab
-- **Chat AI**: Natural language interface ("search for quantum cryptography", "generate outline")
-- **Explore Panel**: Indexed list of papers (#1, #2...) found during research
-- **Knowledge Tree**: Visual graph of papers and topics
-- **Outline Panel**: AI-generated or manual outline with source-linked claims
-- **Ingestion**: Papers are automatically ingested when found (if PDF available)
+#### Research Tab (4 sub-tabs + Chat)
+- **Explore**: Candidate papers found via search (not yet ingested). Click "Ingest" to add to Library.
+- **Library**: Ingested papers grouped by AI-detected topics (Zotero-like view)
+- **Tree**: Visual knowledge graph of ingested papers and their relationships
+- **Outline**: AI-generated outline with claims linked to supporting sources
+- **Chat**: Always-visible AI assistant for searches, outline generation, etc.
 
 #### Write Tab
 - **Monaco Editor**: Professional writing interface

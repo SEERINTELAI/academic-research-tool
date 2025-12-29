@@ -347,6 +347,38 @@ export interface ResearchSessionInfo {
   papers_found: number;
   papers_ingested: number;
   outline_sections: number;
+}
+
+// Library types (for Library Tab - Zotero-like view)
+export interface LibraryPaper {
+  id: string;
+  title: string;
+  authors: Author[];
+  year: number | null;
+  topic: string | null;
+  topic_confidence: number;
+  doi: string | null;
+  journal: string | null;
+  citation_count: number | null;
+  ingestion_status: string;
+  ingested_at: string | null;
+  display_index: number | null;
+}
+
+export interface TopicGroup {
+  topic: string;
+  paper_count: number;
+  papers: LibraryPaper[];
+  is_expanded: boolean;
+}
+
+export interface LibraryResponse {
+  project_id: string;
+  topics: TopicGroup[];
+  total_papers: number;
+  total_topics: number;
+  papers_ingested: number;
+  papers_pending: number;
   created_at: string;
   updated_at: string;
 }
@@ -440,6 +472,10 @@ export const api = {
   // Outline with Sources (Outline Tab)
   getOutlineWithSources: (token: string, projectId: string) =>
     apiRequest<OutlineWithSources>('GET', `/api/projects/${projectId}/research-ui/outline`, { token }),
+
+  // Library (for Library Tab)
+  getLibrary: (token: string, projectId: string) =>
+    apiRequest<LibraryResponse>('GET', `/api/projects/${projectId}/research-ui/library`, { token }),
 
   // Knowledge Tree (Knowledge Tree Tab)
   getKnowledgeTree: (token: string, projectId: string) =>

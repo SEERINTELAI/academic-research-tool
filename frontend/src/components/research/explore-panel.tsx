@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, ExternalLink, Star, StarOff, Check, Clock } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileText, Download, Search, Loader2, Star } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, PaperListItem } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { Badge } from '@/components/ui/badge';
@@ -18,21 +19,52 @@ interface ExplorePanelProps {
 
 function PaperRow({
   paper,
+  projectId,
   isSelected,
   onClick,
+  onIngested,
 }: {
   paper: PaperListItem;
+  projectId: string;
   isSelected: boolean;
   onClick: () => void;
+  onIngested: () => void;
 }) {
+  const token = useAuthStore((s) => s.token) || 'demo-token';
+  const queryClient = useQueryClient();
+
+  const ingestMutation = useMutation({
+    mutationFn: () => {
+      if (!paper.source_id) {
+        throw new Error('No source ID for this paper');
+      }
+      return api.ingestSource(token, projectId, paper.source_id);
+    },
+    onSuccess: () => {
+      toast.success('Paper ingested! It will appear in your Library.');
+      // Refresh both explore and library
+      queryClient.invalidateQueries({ queryKey: ['research-papers', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['library', projectId] });
+      onIngested();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to ingest paper');
+    },
+  });
+
   const authorText = paper.authors.length > 0
     ? paper.authors.slice(0, 2).map((a) => a.name).join(', ')
     : 'Unknown';
 
+  const handleIngest = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    ingestMutation.mutate();
+  };
+
   return (
-    <button
+    <div
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors ${
+      className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer ${
         isSelected ? 'bg-primary/5 border-l-2 border-l-primary' : ''
       }`}
     >
@@ -69,17 +101,27 @@ function PaperRow({
             </p>
           )}
 
-          {/* Status indicators */}
+          {/* Actions */}
           <div className="flex items-center gap-2 mt-2">
-            {paper.is_ingested ? (
-              <Badge variant="outline" className="text-[10px] gap-1">
-                <Check className="h-3 w-3 text-green-500" />
-                Ingested
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[10px] gap-1">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                Pending
+            {paper.pdf_url && paper.source_id && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleIngest}
+                disabled={ingestMutation.isPending}
+              >
+                {ingestMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3 mr-1" />
+                )}
+                Ingest
+              </Button>
+            )}
+            {!paper.pdf_url && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                No PDF available
               </Badge>
             )}
             {paper.citation_count && paper.citation_count > 0 && (
@@ -93,7 +135,7 @@ function PaperRow({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -117,10 +159,13 @@ function LoadingSkeleton() {
 export function ExplorePanel({ projectId, onSelectPaper, selectedPaperId }: ExplorePanelProps) {
   const token = useAuthStore((s) => s.token) || 'demo-token';
 
-  const { data: papers, isLoading, error } = useQuery({
+  const { data: allPapers, isLoading, error } = useQuery({
     queryKey: ['research-papers', projectId],
     queryFn: () => api.getPapersList(token, projectId),
   });
+
+  // Filter to only show non-ingested papers (candidates)
+  const papers = allPapers?.filter((p) => !p.is_ingested) || [];
 
   if (isLoading) {
     return <LoadingSkeleton />;
@@ -138,33 +183,48 @@ export function ExplorePanel({ projectId, onSelectPaper, selectedPaperId }: Expl
     );
   }
 
-  if (!papers || papers.length === 0) {
+  if (papers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center p-6">
-        <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="font-medium mb-2">No papers yet</h3>
+        <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
+        <h3 className="font-medium mb-2">No papers to explore</h3>
         <p className="text-sm text-muted-foreground">
-          Start by searching for papers in the chat.
+          Search for papers in the chat to find candidates.
           <br />
           Try: &quot;search for quantum cryptography&quot;
+          <br />
+          <span className="text-xs mt-2 block text-muted-foreground/70">
+            Ingested papers appear in the Library tab.
+          </span>
         </p>
       </div>
     );
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="divide-y divide-border/50">
-        {papers.map((paper) => (
-          <PaperRow
-            key={paper.node_id}
-            paper={paper}
-            isSelected={paper.node_id === selectedPaperId}
-            onClick={() => onSelectPaper(paper)}
-          />
-        ))}
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-4 py-2 border-b bg-muted/30">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium">{papers.length}</span> papers to review •{' '}
+          <span className="text-muted-foreground/70">Click Ingest to add to your Library</span>
+        </p>
       </div>
-    </ScrollArea>
+
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-border/50">
+          {papers.map((paper) => (
+            <PaperRow
+              key={paper.node_id}
+              paper={paper}
+              projectId={projectId}
+              isSelected={paper.node_id === selectedPaperId}
+              onClick={() => onSelectPaper(paper)}
+              onIngested={() => {}}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
-

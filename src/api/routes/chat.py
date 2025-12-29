@@ -12,14 +12,18 @@ from fastapi import APIRouter, HTTPException, status
 
 from src.api.deps import CurrentUser, DatabaseDep
 from src.models.chat import (
+    Author,
     ChatMessage,
     ChatRequest,
     ChatResponse,
     KnowledgeTreeGraph,
+    LibraryPaper,
+    LibraryResponse,
     OutlineWithSources,
     PaperDetails,
     PaperListItem,
     ResearchSessionInfo,
+    TopicGroup,
 )
 from src.services.research_agent import ResearchAgent, ResearchAgentError
 
@@ -153,6 +157,96 @@ async def get_paper_details(
         raise
     except Exception as e:
         logger.exception(f"Error getting paper details: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+# ============================================================================
+# Library Endpoints (for Library Tab - Zotero-like view)
+# ============================================================================
+
+@router.get(
+    "/library",
+    response_model=LibraryResponse,
+    summary="Get library grouped by topic",
+    description="Get ingested papers grouped by AI-detected topics for Zotero-like view.",
+)
+async def get_library(
+    project_id: UUID,
+    user: CurrentUser,
+    db: DatabaseDep,
+) -> LibraryResponse:
+    """
+    Get library of ingested papers grouped by topic.
+    
+    Papers are classified by AI into topics like "Machine Learning", 
+    "Quantum Computing", etc. for easy browsing.
+    """
+    try:
+        # Get all sources for this project that are ingested
+        result = db.table("source")\
+            .select("*")\
+            .eq("project_id", str(project_id))\
+            .eq("ingestion_status", "ready")\
+            .order("topic")\
+            .execute()
+        
+        sources = result.data or []
+        
+        # Group by topic
+        topic_map: dict[str, list[LibraryPaper]] = {}
+        for source in sources:
+            topic = source.get("topic") or "Uncategorized"
+            
+            if topic not in topic_map:
+                topic_map[topic] = []
+            
+            # Parse authors
+            authors_raw = source.get("authors") or []
+            authors = [
+                Author(name=a.get("name", "Unknown") if isinstance(a, dict) else str(a))
+                for a in authors_raw
+            ]
+            
+            paper = LibraryPaper(
+                id=source["id"],
+                title=source.get("title", "Unknown"),
+                authors=authors,
+                year=source.get("publication_year"),
+                topic=topic,
+                topic_confidence=source.get("topic_confidence", 0.0),
+                doi=source.get("doi"),
+                journal=source.get("journal"),
+                citation_count=source.get("citation_count"),
+                ingestion_status=source.get("ingestion_status", "pending"),
+                ingested_at=source.get("updated_at"),
+            )
+            topic_map[topic].append(paper)
+        
+        # Build response
+        topics = [
+            TopicGroup(
+                topic=topic_name,
+                paper_count=len(papers),
+                papers=papers,
+            )
+            for topic_name, papers in sorted(topic_map.items())
+        ]
+        
+        total_papers = sum(len(papers) for papers in topic_map.values())
+        
+        return LibraryResponse(
+            project_id=project_id,
+            topics=topics,
+            total_papers=total_papers,
+            total_topics=len(topics),
+            papers_ingested=total_papers,
+            papers_pending=0,  # These are all ingested
+        )
+    except Exception as e:
+        logger.exception(f"Error getting library: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),

@@ -83,17 +83,26 @@ The UI is organized into two main tabs per project:
 
 | Tab | Components | Purpose |
 |-----|------------|---------|
-| **Research** | Chat, Explore, Tree, Outline | AI-driven research workflow |
+| **Research** | Chat + 4 sub-tabs | AI-driven research workflow |
 | **Write** | Monaco Editor | Document composition |
 
-#### Research Tab Components
+#### Research Tab Components (4 Sub-tabs)
+
+| Sub-tab | Data Source | Purpose |
+|---------|-------------|---------|
+| Explore | `knowledge_node` (is_ingested=false) | Candidate papers - search results not yet ingested |
+| Library | `source` table (ingested) | Ingested papers grouped by AI-detected topic |
+| Tree | `knowledge_node` (is_ingested=true) | Visual graph of papers and relationships |
+| Outline | `outline_claim` + sources | Claims linked to supporting papers |
 
 | Component | Purpose |
 |-----------|---------|
-| Chat Panel | Natural language AI interface for research commands |
-| Explore Panel | Indexed list of papers found during research |
+| Chat Panel | Always-visible AI interface for searches, outline generation |
+| Explore Panel | Candidate papers with "Ingest" buttons |
+| Library Panel | Zotero-like view with collapsible topic groups |
 | Knowledge Tree | Visual graph of papers and topics |
 | Outline Panel | AI-generated outline with source-linked claims |
+| Details Panel | Full paper/claim details when selected |
 
 #### Write Tab Components
 

@@ -1261,6 +1261,14 @@ class ResearchAgent:
     
     async def _create_source(self, paper: dict) -> UUID:
         """Create a source record from a paper."""
+        # Classify topic for Library grouping
+        from src.services.topic_classifier import get_topic_classifier
+        classifier = get_topic_classifier()
+        classification = await classifier.classify(
+            title=paper.get("title", ""),
+            abstract=paper.get("abstract"),
+        )
+        
         # Map OpenAlex fields to our schema
         data = {
             "project_id": str(self.project_id),
@@ -1276,6 +1284,9 @@ class ResearchAgent:
             # Map venue to journal column
             "journal": paper.get("venue"),
             "citation_count": paper.get("citation_count"),
+            # Topic classification for Library tab grouping
+            "topic": classification.topic,
+            "topic_confidence": classification.confidence,
         }
         
         # Remove None values to avoid Supabase issues
@@ -1307,6 +1318,13 @@ class ResearchAgent:
                             .update({"ingestion_status": "ready"})\
                             .eq("id", str(source_id))\
                             .execute()
+                        
+                        # Mark the knowledge node as ingested
+                        # This moves the paper from Explore to Library/Tree
+                        self.db.table("knowledge_node")\
+                            .update({"is_ingested": True})\
+                            .eq("source_id", str(source_id))\
+                            .execute()
         except Exception as e:
             logger.warning(f"Failed to ingest paper: {e}")
     
@@ -1319,6 +1337,7 @@ class ResearchAgent:
         parent_id: Optional[UUID] = None,
         confidence: float = 0.5,
         display_index: Optional[int] = None,
+        is_ingested: bool = False,
     ) -> KnowledgeNode:
         """Create a knowledge node."""
         data = {
@@ -1329,6 +1348,7 @@ class ResearchAgent:
             "title": title,
             "content": content,
             "confidence": confidence,
+            "is_ingested": is_ingested,
         }
         if display_index is not None:
             data["display_index"] = display_index

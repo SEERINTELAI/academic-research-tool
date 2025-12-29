@@ -5,9 +5,10 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore, useProjectStore } from '@/lib/store';
-import { api, PaperListItem, ClaimWithSources, SectionWithClaims, TreeNode } from '@/lib/api';
+import { api, PaperListItem, LibraryPaper, ClaimWithSources, SectionWithClaims, TreeNode } from '@/lib/api';
 
 import { ExplorePanel } from '@/components/research/explore-panel';
+import { LibraryPanel } from '@/components/research/library-panel';
 import { OutlinePanel } from '@/components/research/outline-panel';
 import { ChatPanel } from '@/components/research/chat-panel';
 import { KnowledgeTreePanel } from '@/components/research/knowledge-tree-panel';
@@ -37,6 +38,26 @@ export default function ResearchPage() {
   // Handlers
   const handleSelectPaper = useCallback((paper: PaperListItem) => {
     setSelectedItem({ type: 'paper', paper });
+  }, []);
+
+  // Handle library paper selection (convert LibraryPaper to PaperListItem format)
+  const handleSelectLibraryPaper = useCallback((paper: LibraryPaper) => {
+    const asPaperListItem: PaperListItem = {
+      index: paper.display_index || 0,
+      paper_id: paper.id,
+      node_id: paper.id,
+      source_id: paper.id,
+      title: paper.title,
+      authors: paper.authors,
+      year: paper.year,
+      summary: '',
+      citation_count: paper.citation_count,
+      relevance_score: 0,
+      user_rating: null,
+      is_ingested: true,
+      pdf_url: null,
+    };
+    setSelectedItem({ type: 'paper', paper: asPaperListItem });
   }, []);
 
   const handleSelectClaim = useCallback((claim: ClaimWithSources, section: SectionWithClaims) => {
@@ -69,9 +90,8 @@ export default function ResearchPage() {
   }, []);
 
   const handlePaperClick = useCallback((index: number) => {
-    // Switch to explore tab and select the paper
-    setActiveTab('explore');
-    // The explore panel will handle the selection via query
+    // Switch to library tab for ingested papers
+    setActiveTab('library');
   }, []);
 
   const handleCloseDetails = useCallback(() => {
@@ -103,25 +123,31 @@ export default function ResearchPage() {
 
       {/* Main content: 2 columns */}
       <div className="flex flex-1 min-h-0">
-        {/* Left: 3 Tabs */}
+        {/* Left: 4 Tabs */}
         <div className="w-1/2 flex flex-col border-r">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
             <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0">
               <TabsTrigger
                 value="explore"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-sm"
               >
                 Explore
               </TabsTrigger>
               <TabsTrigger
-                value="tree"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                value="library"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-sm"
               >
-                Knowledge Tree
+                Library
+              </TabsTrigger>
+              <TabsTrigger
+                value="tree"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-sm"
+              >
+                Tree
               </TabsTrigger>
               <TabsTrigger
                 value="outline"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-2 text-sm"
               >
                 Outline
               </TabsTrigger>
@@ -132,6 +158,14 @@ export default function ResearchPage() {
                 <ExplorePanel
                   projectId={projectId}
                   onSelectPaper={handleSelectPaper}
+                  selectedPaperId={selectedPaper?.node_id}
+                />
+              </TabsContent>
+
+              <TabsContent value="library" className="h-full m-0 p-0">
+                <LibraryPanel
+                  projectId={projectId}
+                  onSelectPaper={handleSelectLibraryPaper}
                   selectedPaperId={selectedPaper?.node_id}
                 />
               </TabsContent>

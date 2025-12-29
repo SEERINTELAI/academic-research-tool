@@ -2,28 +2,43 @@
 
 ## Overview
 
-The Research tab builds a **Knowledge Tree** of sources that auto-condenses into an **Outline**. Users critique both sides: curating sources and refining the outline structure.
+The Research tab has **4 sub-tabs** that represent different stages of the research workflow:
+
+1. **Explore** - Discover candidate papers (not yet ingested)
+2. **Library** - Browse ingested papers grouped by AI-detected topic
+3. **Tree** - Visual knowledge graph of papers and relationships
+4. **Outline** - Auto-generated outline with claims linked to sources
+
+Plus an **always-visible Chat panel** for AI interaction.
 
 ## Core Concept
 
 ```
-[Research Tab]                    [Outline Tab]
-     │                                  │
-     ▼                                  ▼
-┌─────────────────┐            ┌─────────────────┐
-│  Knowledge Tree │ ──────────▶│  Auto-Outline   │
-│                 │            │                 │
-│  • Sources      │            │  • Sections     │
-│  • Summaries    │            │  • Claims       │
-│  • Connections  │            │  • [Source ▸]   │
-└─────────────────┘            └─────────────────┘
-        │                              │
-        ▼                              ▼
-   User Actions:                User Actions:
-   - Remove source              - "Need more papers"
-   - "Go deeper on X"           - "Irrelevant, remove"
-   - "Find papers on Y"         - "Expand this section"
+┌─────────────────────────────────────────────────────────────┐
+│                     Research Tab (4 Sub-tabs)               │
+├────────────┬────────────┬────────────┬────────────┬─────────┤
+│  Explore   │  Library   │    Tree    │  Outline   │  Chat   │
+│ (search)   │ (ingested) │  (graph)   │ (claims)   │ (AI)    │
+├────────────┴────────────┴────────────┴────────────┼─────────┤
+│                                                    │ Always  │
+│  [Selected tab content]                            │ visible │
+│                                                    │         │
+│  Details panel (when item selected)                │         │
+└────────────────────────────────────────────────────┴─────────┘
+
+Flow:
+  Search → Explore → Ingest → Library → Tree → Outline
+           (candidates)  (grouped)  (graph) (claims)
 ```
+
+## Tab Purposes
+
+| Tab | Data Source | Purpose |
+|-----|-------------|---------|
+| **Explore** | `knowledge_node` (is_ingested=false) | Candidate papers from search - review and ingest |
+| **Library** | `source` table | Ingested papers grouped by AI-detected topic |
+| **Tree** | `knowledge_node` (is_ingested=true) | Visual graph of papers and relationships |
+| **Outline** | `outline_claim` + sources | Claims with supporting source links |
 
 ## Data Model
 
