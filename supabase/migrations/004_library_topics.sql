@@ -13,7 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_source_topic ON source(project_id, topic);
 ALTER TABLE knowledge_node ADD COLUMN IF NOT EXISTS is_ingested BOOLEAN DEFAULT false;
 
 -- Create index for ingestion status queries
-CREATE INDEX IF NOT EXISTS idx_knowledge_node_ingested ON knowledge_node(project_id, is_ingested);
+-- Note: knowledge_node has session_id, not project_id
+CREATE INDEX IF NOT EXISTS idx_knowledge_node_ingested ON knowledge_node(session_id, is_ingested);
 
 -- Comment explaining the tab structure:
 -- Explore: knowledge_node WHERE is_ingested = false (candidates)
