@@ -53,7 +53,9 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (outline) {
-      setSections(outline);
+      // API returns {project_id, sections, total_count} - extract just the sections array
+      const sections = Array.isArray(outline) ? outline : outline.sections || [];
+      setSections(sections);
     }
   }, [outline, setSections]);
 
