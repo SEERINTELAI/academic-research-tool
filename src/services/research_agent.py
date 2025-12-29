@@ -197,8 +197,21 @@ class ResearchAgent:
             )
         
         # Convert OpenAlex papers to dict format for compatibility
-        papers = [
-            {
+        papers = []
+        for p in search_result.results:
+            # Extract arXiv ID from external_ids or DOI
+            arxiv_id = p.external_ids.get("arxiv") or p.external_ids.get("ArXiv")
+            if not arxiv_id and p.doi and "arxiv" in p.doi.lower():
+                # Extract from DOI like "10.48550/arxiv.2003.06557"
+                import re
+                match = re.search(r"arxiv\.(\d+\.\d+)", p.doi.lower())
+                if match:
+                    arxiv_id = match.group(1)
+            
+            # Only use pdf_url if it's a real PDF URL, not a landing page
+            pdf_url = p.pdf_url  # Don't fallback to open_access_url
+            
+            papers.append({
                 "paper_id": p.paper_id,
                 "title": p.title,
                 "authors": [{"name": a.name, "author_id": a.author_id} for a in p.authors],
@@ -207,10 +220,9 @@ class ResearchAgent:
                 "venue": p.venue,
                 "citation_count": p.citation_count,
                 "doi": p.doi,
-                "pdf_url": p.pdf_url or p.open_access_url,
-            }
-            for p in search_result.results
-        ]
+                "pdf_url": pdf_url,
+                "arxiv_id": arxiv_id,
+            })
         logger.info(f"Found {len(papers)} papers")
         
         if not papers:
@@ -912,6 +924,20 @@ class ResearchAgent:
                 else:
                     authors.append(PaperAuthor(name=str(author)))
             
+            # Compute has_pdf: True if we have arXiv ID or direct PDF URL
+            pdf_url = source.get("pdf_url")
+            arxiv_id = source.get("arxiv_id")
+            doi = source.get("doi")
+            
+            # Check if DOI contains arXiv reference
+            if not arxiv_id and doi and "arxiv" in doi.lower():
+                import re
+                match = re.search(r"arxiv\.(\d+\.\d+)", doi.lower())
+                if match:
+                    arxiv_id = match.group(1)
+            
+            has_pdf = bool(arxiv_id) or bool(pdf_url and pdf_url.endswith(".pdf"))
+            
             papers.append(PaperListItem(
                 index=row.get("display_index") or len(papers) + 1,
                 paper_id=source.get("paper_id", ""),
@@ -925,7 +951,9 @@ class ResearchAgent:
                 relevance_score=row.get("relevance_score", 0.0),
                 user_rating=row.get("user_rating"),
                 is_ingested=source.get("ingestion_status") == "ready",
-                pdf_url=source.get("pdf_url"),
+                pdf_url=pdf_url,
+                arxiv_id=arxiv_id,
+                has_pdf=has_pdf,
             ))
         
         return papers
@@ -1277,6 +1305,7 @@ class ResearchAgent:
             "abstract": paper.get("abstract"),
             "publication_year": paper.get("year"),
             "doi": paper.get("doi"),
+            "arxiv_id": paper.get("arxiv_id"),  # Store arXiv ID for PDF download
             "pdf_url": paper.get("pdf_url"),
             "ingestion_status": "pending",
             # Map external ID to semantic_scholar_id column (works for any external ID)

@@ -352,14 +352,6 @@ Confirm the deletion."""
         """
         settings = get_settings()
         
-        if not settings.lightrag_api_key:
-            return UploadResult(
-                success=False,
-                filename=filename,
-                status="failed",
-                error="LightRAG API key not configured. Set LIGHTRAG_API_KEY in environment.",
-            )
-        
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 # Prepare multipart form data
@@ -367,11 +359,27 @@ Confirm the deletion."""
                     "file": (filename, file_bytes, "application/pdf")
                 }
                 
+                # Get auth token - either configured API key or fetch guest token
+                headers = {}
+                if settings.lightrag_api_key:
+                    # Use configured API key as Bearer token
+                    headers["Authorization"] = f"Bearer {settings.lightrag_api_key}"
+                else:
+                    # Fetch guest token from LightRAG auth-status endpoint
+                    try:
+                        auth_response = await client.get(f"{settings.lightrag_url}/auth-status")
+                        if auth_response.status_code == 200:
+                            auth_data = auth_response.json()
+                            guest_token = auth_data.get("access_token")
+                            if guest_token:
+                                headers["Authorization"] = f"Bearer {guest_token}"
+                                logger.debug("Using LightRAG guest token for upload")
+                    except Exception as auth_err:
+                        logger.warning(f"Failed to fetch LightRAG guest token: {auth_err}")
+                
                 response = await client.post(
                     f"{settings.lightrag_url}/documents/upload",
-                    headers={
-                        "X-API-Key": settings.lightrag_api_key
-                    },
+                    headers=headers,
                     files=files,
                 )
                 

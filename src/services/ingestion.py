@@ -255,7 +255,7 @@ class IngestionService:
         """Update source as successfully uploaded to LightRAG."""
         self.db.table("source")\
             .update({
-                "ingestion_status": IngestionStatus.COMPLETED.value,
+                "ingestion_status": IngestionStatus.READY.value,
                 "hyperion_doc_name": hyperion_doc_name,
                 "error_message": None,
             })\

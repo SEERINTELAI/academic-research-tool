@@ -22,6 +22,8 @@ USER_AGENT = "AcademicResearchTool/0.1.0 (mailto:research@example.com)"
 # arXiv PDF URL patterns
 ARXIV_PDF_PATTERN = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d+\.\d+)", re.IGNORECASE)
 ARXIV_PDF_URL_TEMPLATE = "https://arxiv.org/pdf/{arxiv_id}.pdf"
+# Pattern to extract arXiv ID from DOI (e.g., 10.48550/arxiv.2003.06557 -> 2003.06557)
+ARXIV_DOI_PATTERN = re.compile(r"10\.48550/arxiv\.(\d+\.\d+)", re.IGNORECASE)
 
 
 class PDFProcessorError(Exception):
@@ -103,11 +105,19 @@ class PDFDownloader:
                 except httpx.HTTPError as e:
                     logger.warning(f"Direct URL failed: {e}")
             
-            # Try arXiv
-            if arxiv_id:
+            # Try arXiv - either from explicit arxiv_id or extracted from DOI
+            effective_arxiv_id = arxiv_id
+            if not effective_arxiv_id and doi:
+                # Try to extract arXiv ID from DOI (e.g., 10.48550/arxiv.2003.06557)
+                doi_match = ARXIV_DOI_PATTERN.search(doi)
+                if doi_match:
+                    effective_arxiv_id = doi_match.group(1)
+                    logger.info(f"Extracted arXiv ID from DOI: {effective_arxiv_id}")
+            
+            if effective_arxiv_id:
                 try:
                     # Clean arxiv ID
-                    clean_id = arxiv_id.replace("arXiv:", "").strip()
+                    clean_id = effective_arxiv_id.replace("arXiv:", "").strip()
                     arxiv_url = ARXIV_PDF_URL_TEMPLATE.format(arxiv_id=clean_id)
                     
                     logger.info(f"Downloading from arXiv: {arxiv_url}")

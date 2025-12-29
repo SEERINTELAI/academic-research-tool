@@ -84,6 +84,8 @@ class PaperListItem(BaseModel):
     
     is_ingested: bool = False
     pdf_url: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    has_pdf: bool = False  # True if PDF can be downloaded (arXiv or direct URL)
 
 
 class PaperDetails(BaseModel):

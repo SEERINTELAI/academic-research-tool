@@ -267,6 +267,8 @@ export interface PaperListItem {
   user_rating: string | null;
   is_ingested: boolean;
   pdf_url: string | null;
+  arxiv_id: string | null;
+  has_pdf: boolean;  // True if PDF can be downloaded (arXiv or direct URL)
 }
 
 export interface PaperDetails extends PaperListItem {

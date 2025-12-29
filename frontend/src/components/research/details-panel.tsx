@@ -117,8 +117,8 @@ function PaperDetailsView({
             </a>
           </Button>
         )}
-        {/* Ingest button for papers that aren't ingested yet */}
-        {!displayData.is_ingested && paper.source_id && (
+        {/* Ingest button for papers that aren't ingested yet and have PDF available */}
+        {!displayData.is_ingested && paper.source_id && paper.has_pdf && (
           <Button
             variant="default"
             size="sm"
@@ -132,6 +132,12 @@ function PaperDetailsView({
             )}
             Ingest Paper
           </Button>
+        )}
+        {/* No PDF badge for papers without accessible PDF */}
+        {!displayData.is_ingested && !paper.has_pdf && (
+          <Badge variant="outline" className="text-muted-foreground">
+            No PDF available
+          </Badge>
         )}
       </div>
 

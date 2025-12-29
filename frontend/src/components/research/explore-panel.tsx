@@ -103,7 +103,7 @@ function PaperRow({
 
           {/* Actions */}
           <div className="flex items-center gap-2 mt-2">
-            {paper.pdf_url && paper.source_id && (
+            {paper.has_pdf && paper.source_id && (
               <Button
                 variant="default"
                 size="sm"
@@ -119,7 +119,7 @@ function PaperRow({
                 Ingest
               </Button>
             )}
-            {!paper.pdf_url && (
+            {!paper.has_pdf && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
                 No PDF available
               </Badge>
