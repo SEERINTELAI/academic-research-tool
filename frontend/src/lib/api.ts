@@ -421,8 +421,11 @@ export const api = {
   // ============================================================================
 
   // Chat
-  sendChatMessage: (token: string, projectId: string, message: string) =>
-    apiRequest<ChatResponse>('POST', `/api/projects/${projectId}/research-ui/chat`, { token, body: { message } }),
+  sendChatMessage: (token: string, projectId: string, message: string, autoIngest = true) =>
+    apiRequest<ChatResponse>('POST', `/api/projects/${projectId}/research-ui/chat`, { 
+      token, 
+      body: { message, auto_ingest: autoIngest } 
+    }),
 
   getChatHistory: (token: string, projectId: string, limit = 50) =>
     apiRequest<ChatMessage[]>('GET', `/api/projects/${projectId}/research-ui/chat/history?limit=${limit}`, { token }),

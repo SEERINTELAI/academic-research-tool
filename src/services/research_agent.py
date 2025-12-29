@@ -83,16 +83,23 @@ class ResearchAgent:
         outline = await agent.generate_outline()
     """
     
-    def __init__(self, project_id: UUID, session_id: Optional[UUID] = None):
+    def __init__(
+        self,
+        project_id: UUID,
+        session_id: Optional[UUID] = None,
+        auto_ingest: bool = True,
+    ):
         """
         Initialize research agent.
         
         Args:
             project_id: Project to research for.
             session_id: Existing session to continue (optional).
+            auto_ingest: Whether to automatically ingest papers with PDFs.
         """
         self.project_id = project_id
         self.session_id = session_id
+        self.auto_ingest = auto_ingest
         self.db = get_supabase_client()
         self.settings = get_settings()
     
@@ -327,7 +334,7 @@ class ResearchAgent:
             topic=f"{session.topic} {request.subtopic}",
             guidance=request.guidance,
             max_papers=request.max_papers,
-            auto_ingest=True,
+            auto_ingest=self.auto_ingest,
         )
         
         result = await self.explore(explore_request)
@@ -422,7 +429,7 @@ class ResearchAgent:
             topic=suggestion,
             guidance=f"User suggested exploring: {suggestion}",
             max_papers=5,
-            auto_ingest=True,
+            auto_ingest=self.auto_ingest,
         ))
     
     # ========================================================================
@@ -543,7 +550,7 @@ class ResearchAgent:
                 topic=claim.claim_text,
                 guidance=f"Find papers that support or discuss: {claim.claim_text}",
                 max_papers=5,
-                auto_ingest=True,
+                auto_ingest=self.auto_ingest,
             ))
             
             # Update claim with new sources
@@ -680,7 +687,7 @@ class ResearchAgent:
             topic=query,
             guidance=intent.raw_message,
             max_papers=10,
-            auto_ingest=True,
+            auto_ingest=self.auto_ingest,
         ))
         
         # Get display indices of new papers

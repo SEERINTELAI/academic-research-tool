@@ -40,6 +40,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Request to send a chat message."""
     message: str = Field(..., min_length=1, max_length=5000)
+    auto_ingest: bool = Field(default=True, description="Automatically ingest papers with PDFs")
 
 
 class ChatResponse(BaseModel):

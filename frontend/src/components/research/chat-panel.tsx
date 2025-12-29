@@ -12,6 +12,8 @@ import {
   Hash,
   Copy,
   Check,
+  Download,
+  DownloadOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ChatMessage, ChatResponse, PaperListItem } from '@/lib/api';
@@ -20,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatPanelProps {
   projectId: string;
@@ -168,6 +172,7 @@ export function ChatPanel({ projectId, selectedPaper, onPaperMention }: ChatPane
 
   const [input, setInput] = useState('');
   const [localMessages, setLocalMessages] = useState<DisplayMessage[]>([]);
+  const [autoIngest, setAutoIngest] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -194,7 +199,7 @@ export function ChatPanel({ projectId, selectedPaper, onPaperMention }: ChatPane
 
   // Send message mutation
   const sendMutation = useMutation({
-    mutationFn: (message: string) => api.sendChatMessage(token, projectId, message),
+    mutationFn: (message: string) => api.sendChatMessage(token, projectId, message, autoIngest),
     onSuccess: (response: ChatResponse) => {
       // Add assistant response to local messages
       setLocalMessages((prev) => [
@@ -270,10 +275,44 @@ export function ChatPanel({ projectId, selectedPaper, onPaperMention }: ChatPane
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b">
-        <h3 className="font-serif font-semibold">Research Assistant</h3>
-        <p className="text-xs text-muted-foreground">
-          Chat to search, explore, and build your outline
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-serif font-semibold">Research Assistant</h3>
+            <p className="text-xs text-muted-foreground">
+              Chat to search, explore, and build your outline
+            </p>
+          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {autoIngest ? (
+                      <Download className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <DownloadOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </span>
+                  <Switch
+                    checked={autoIngest}
+                    onCheckedChange={setAutoIngest}
+                    className="data-[state=checked]:bg-green-500"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <p className="text-xs font-medium">
+                  {autoIngest ? 'Auto-ingest ON' : 'Auto-ingest OFF'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {autoIngest
+                    ? 'Papers with PDFs will be automatically uploaded to RAG'
+                    : 'Papers will not be auto-ingested (you can ingest manually)'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
 
       {/* Messages */}

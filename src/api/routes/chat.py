@@ -53,7 +53,7 @@ async def send_message(
     - Link sources to claims
     """
     try:
-        agent = ResearchAgent(project_id)
+        agent = ResearchAgent(project_id, auto_ingest=request.auto_ingest)
         response = await agent.process_message(request.message)
         return response
     except ResearchAgentError as e:
