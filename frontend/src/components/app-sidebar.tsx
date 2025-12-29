@@ -4,12 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BookOpen,
-  FileText,
   FolderOpen,
-  Library,
   MessageSquare,
   Plus,
-  Search,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -30,19 +27,18 @@ import { useProjectStore } from '@/lib/store';
 
 const navItems = [
   { title: 'Projects', icon: FolderOpen, href: '/projects' },
-  { title: 'Search Papers', icon: Search, href: '/search' },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const currentProject = useProjectStore((s) => s.currentProject);
 
+  // Simplified: just Research and Write
+  // Outline and Sources are accessible within the Research tab
   const projectNavItems = currentProject
     ? [
-        { title: 'Outline', icon: FileText, href: `/projects/${currentProject.id}/outline` },
-        { title: 'Sources', icon: Library, href: `/projects/${currentProject.id}/sources` },
-        { title: 'Write', icon: BookOpen, href: `/projects/${currentProject.id}/write` },
         { title: 'Research', icon: MessageSquare, href: `/projects/${currentProject.id}/research` },
+        { title: 'Write', icon: BookOpen, href: `/projects/${currentProject.id}/write` },
       ]
     : [];
 
