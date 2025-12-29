@@ -50,10 +50,22 @@ def verify_token(token: str) -> dict:
         # Fall back to just decoding without verification
         if settings.is_development:
             logger.warning("JWT secret not configured, skipping verification in development")
+            
+            # For demo tokens (non-JWT format), create a mock payload
+            if not token.startswith("eyJ"):
+                logger.info(f"Using demo token for development: {token[:20]}...")
+                return {
+                    "sub": f"demo-user-{token[:8]}",
+                    "email": "demo@example.com",
+                    "role": "authenticated",
+                }
+            
             try:
                 # Decode without verification - ONLY for development
+                # jose.jwt.decode requires a key, so we use a dummy one
                 payload = jwt.decode(
                     token, 
+                    key="dummy-key-for-dev",
                     options={"verify_signature": False}
                 )
                 return payload
