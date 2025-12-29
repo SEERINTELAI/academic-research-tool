@@ -158,17 +158,53 @@ function GraphCanvas({
     const nodeMap = new Map<string, LayoutNode>();
     layoutNodes.forEach((n) => nodeMap.set(n.id, n));
 
-    // Draw edges
-    ctx.strokeStyle = 'rgba(150, 150, 150, 0.3)';
-    ctx.lineWidth = 1;
+    // Draw edges with arrows (source cites target)
+    ctx.strokeStyle = 'rgba(100, 100, 100, 0.4)';
+    ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
+    ctx.lineWidth = 1.5;
+    
     graph.edges.forEach((edge) => {
       const source = nodeMap.get(edge.source);
       const target = nodeMap.get(edge.target);
       if (source && target) {
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) return;
+        
+        // Normalize direction
+        const nx = dx / len;
+        const ny = dy / len;
+        
+        // Calculate arrow endpoint (stop at node edge)
+        const sourceRadius = source.size || 10;
+        const targetRadius = target.size || 10;
+        const startX = source.x + nx * sourceRadius;
+        const startY = source.y + ny * sourceRadius;
+        const endX = target.x - nx * (targetRadius + 6);
+        const endY = target.y - ny * (targetRadius + 6);
+        
+        // Draw line
         ctx.beginPath();
-        ctx.moveTo(source.x, source.y);
-        ctx.lineTo(target.x, target.y);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         ctx.stroke();
+        
+        // Draw arrowhead
+        const arrowSize = 5;
+        const angle = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+          endX - arrowSize * Math.cos(angle - Math.PI / 6),
+          endY - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          endX - arrowSize * Math.cos(angle + Math.PI / 6),
+          endY - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
       }
     });
 
@@ -272,17 +308,21 @@ function GraphCanvas({
       {/* Tooltip */}
       {hoveredNode && (
         <div
-          className="absolute bg-popover border rounded-lg shadow-lg p-2 text-xs max-w-[200px] pointer-events-none"
+          className="absolute bg-popover border rounded-lg shadow-lg p-2 text-xs max-w-[250px] pointer-events-none z-50"
           style={{
-            left: hoveredNode.x * scale + 20,
-            top: hoveredNode.y * scale - 10,
+            left: Math.min(hoveredNode.x * scale + 20, containerRef.current?.clientWidth ?? 400 - 260),
+            top: Math.max(hoveredNode.y * scale - 10, 10),
           }}
         >
-          <p className="font-medium line-clamp-2">{hoveredNode.title}</p>
-          {hoveredNode.year && <p className="text-muted-foreground">{hoveredNode.year}</p>}
-          <Badge variant="outline" className="mt-1 text-[10px]">
-            {hoveredNode.node_type}
-          </Badge>
+          <p className="font-medium line-clamp-3">{hoveredNode.title}</p>
+          {hoveredNode.year && (
+            <p className="text-muted-foreground mt-1">Published: {hoveredNode.year}</p>
+          )}
+          {hoveredNode.paper_index && (
+            <Badge variant="secondary" className="mt-1 text-[10px]">
+              #{hoveredNode.paper_index} in library
+            </Badge>
+          )}
         </div>
       )}
     </div>
@@ -332,9 +372,13 @@ export function KnowledgeTreePanel({
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center p-6">
         <Network className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="font-medium mb-2">No knowledge tree yet</h3>
+        <h3 className="font-medium mb-2">No papers in library yet</h3>
         <p className="text-sm text-muted-foreground">
-          Start researching to build your knowledge graph.
+          Ingest papers to see their citation relationships.
+          <br />
+          <span className="text-xs text-muted-foreground/70">
+            The tree shows how library papers cite each other.
+          </span>
         </p>
       </div>
     );
@@ -344,11 +388,9 @@ export function KnowledgeTreePanel({
     <div className="h-full flex flex-col">
       {/* Stats header */}
       <div className="shrink-0 px-4 py-2 border-b flex items-center gap-4 text-xs text-muted-foreground">
-        <span>{graph.total_papers} papers</span>
+        <span>{graph.total_papers} library papers</span>
         <span>•</span>
-        <span>{graph.total_topics} topics</span>
-        <span>•</span>
-        <span>{graph.nodes.length} nodes</span>
+        <span>{graph.edges.length} citations</span>
       </div>
 
       {/* Graph */}
@@ -363,16 +405,15 @@ export function KnowledgeTreePanel({
       {/* Legend */}
       <div className="shrink-0 px-4 py-2 border-t flex items-center gap-4 text-[10px]">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
-          Topic
-        </span>
-        <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-          Source
+          Library Paper
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-          Claim
+          <span className="w-4 h-[1px] bg-gray-400" />
+          Cites
+        </span>
+        <span className="text-muted-foreground">
+          Node size = citation count
         </span>
       </div>
     </div>

@@ -1113,10 +1113,13 @@ class ResearchAgent:
     
     async def get_knowledge_tree_graph(self) -> KnowledgeTreeGraph:
         """
-        Get knowledge tree for graph visualization.
+        Get citation graph for library papers.
+        
+        Shows only ingested papers from the library as nodes,
+        with edges representing citation relationships between them.
         
         Returns:
-            Tree with nodes and edges for visualization.
+            Graph with paper nodes and citation edges.
         """
         session = await self.get_session()
         if not session:
@@ -1125,72 +1128,105 @@ class ResearchAgent:
                 topic="",
             )
         
-        # Get all nodes
-        result = self.db.table("knowledge_node")\
-            .select("*")\
-            .eq("session_id", str(self.session_id))\
-            .eq("is_hidden", False)\
+        # Get library papers (ingested sources only)
+        result = self.db.table("source")\
+            .select("id, title, authors, publication_year, semantic_scholar_id, doi, arxiv_id, citation_count")\
+            .eq("project_id", str(self.project_id))\
+            .eq("ingestion_status", "ready")\
             .execute()
+        
+        library_papers = result.data
+        if not library_papers:
+            return KnowledgeTreeGraph(
+                session_id=self.session_id,
+                topic=session.topic,
+            )
         
         nodes = []
         edges = []
-        papers_count = 0
-        topics_count = 0
         
-        # Color map for node types
-        colors = {
-            NodeType.TOPIC.value: "#3B82F6",    # Blue
-            NodeType.SOURCE.value: "#10B981",   # Green
-            NodeType.CLAIM.value: "#F59E0B",    # Yellow
-            NodeType.SUMMARY.value: "#8B5CF6",  # Purple
-            NodeType.QUESTION.value: "#EC4899", # Pink
-        }
+        # Build a lookup map: semantic_scholar_id -> source_id
+        ss_id_to_source = {}
+        for paper in library_papers:
+            ss_id = paper.get("semantic_scholar_id")
+            if ss_id:
+                ss_id_to_source[ss_id] = paper["id"]
         
-        for row in result.data:
-            node_type = row["node_type"]
+        # Create nodes for each library paper
+        for i, paper in enumerate(library_papers, 1):
+            title = paper.get("title", "Unknown")
+            year = paper.get("publication_year")
             
-            # Create label (short version for graph display)
-            title = row["title"]
-            if len(title) > 30:
-                label = title[:27] + "..."
+            # Create short label
+            if len(title) > 25:
+                label = title[:22] + "..."
             else:
                 label = title
             
-            # Add year for source nodes
-            if node_type == NodeType.SOURCE.value:
-                papers_count += 1
-                paper_index = row.get("display_index")
-                if paper_index:
-                    label = f"#{paper_index}: {label}"
-            elif node_type == NodeType.TOPIC.value:
-                topics_count += 1
+            # Get first author's last name for label
+            authors = paper.get("authors", [])
+            if authors and len(authors) > 0:
+                first_author = authors[0]
+                if isinstance(first_author, dict):
+                    author_name = first_author.get("name", "").split()[-1]  # Last name
+                else:
+                    author_name = str(first_author).split()[-1]
+                if author_name and year:
+                    label = f"{author_name} ({year})"
+                elif author_name:
+                    label = author_name
+            
+            # Size based on citation count
+            citation_count = paper.get("citation_count") or 0
+            size = min(8 + int(citation_count ** 0.4), 25)  # Scale 8-25 based on citations
             
             nodes.append(TreeNode(
-                id=row["id"],
+                id=paper["id"],
                 label=label,
                 title=title,
-                node_type=node_type,
-                size=15 if node_type == NodeType.TOPIC.value else 10,
-                color=colors.get(node_type, "#6B7280"),
-                paper_index=row.get("display_index"),
-                user_rating=row.get("user_rating"),
+                node_type="paper",
+                year=year,
+                size=size,
+                color="#10B981",  # Green for papers
+                paper_index=i,
             ))
-            
-            # Create edge to parent
-            if row.get("parent_node_id"):
-                edges.append(TreeEdge(
-                    source=row["parent_node_id"],
-                    target=row["id"],
-                    relationship="parent",
-                ))
+        
+        # Fetch references for each paper and create citation edges
+        from src.services.semantic_scholar import SemanticScholarClient
+        
+        try:
+            async with SemanticScholarClient() as ss_client:
+                for paper in library_papers:
+                    ss_id = paper.get("semantic_scholar_id")
+                    if not ss_id:
+                        continue
+                    
+                    try:
+                        # Get references (papers this paper cites)
+                        references = await ss_client.get_paper_references(ss_id)
+                        
+                        # Create edges for references that are also in our library
+                        for ref_ss_id in references:
+                            if ref_ss_id in ss_id_to_source:
+                                # This paper cites another paper in our library
+                                edges.append(TreeEdge(
+                                    source=paper["id"],  # Citing paper
+                                    target=ss_id_to_source[ref_ss_id],  # Cited paper
+                                    relationship="cites",
+                                ))
+                    except Exception as e:
+                        logger.warning(f"Failed to get references for {ss_id}: {e}")
+                        continue
+        except Exception as e:
+            logger.warning(f"Failed to fetch citation data: {e}")
         
         return KnowledgeTreeGraph(
             session_id=self.session_id,
             topic=session.topic,
             nodes=nodes,
             edges=edges,
-            total_papers=papers_count,
-            total_topics=topics_count,
+            total_papers=len(library_papers),
+            total_topics=0,  # Not applicable for citation graph
         )
     
     async def get_chat_history(self, limit: int = 50) -> list[ChatMessage]:
