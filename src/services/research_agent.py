@@ -7,6 +7,7 @@ Orchestrates the research process:
 3. Builds a knowledge tree of findings
 4. Generates outline from accumulated knowledge
 5. Handles user critiques and refinement
+6. Chat-driven interface for natural language control
 """
 
 import logging
@@ -14,6 +15,21 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from src.config import get_settings
+from src.models.chat import (
+    ChatMessage,
+    ChatResponse,
+    ChatRole,
+    ClaimWithSources,
+    KnowledgeTreeGraph,
+    OutlineWithSources,
+    PaperAuthor,
+    PaperDetails,
+    PaperListItem,
+    SectionWithClaims,
+    SourceBadge,
+    TreeEdge,
+    TreeNode,
+)
 from src.models.knowledge import (
     CritiqueRequest,
     DeepenRequest,
@@ -35,6 +51,7 @@ from src.models.knowledge import (
 from src.services.ak_client import AKClient
 from src.services.database import get_supabase_client
 from src.services.hyperion_client import HyperionClient
+from src.services.intent_parser import Intent, parse_intent
 from src.services.semantic_scholar import SemanticScholarClient
 
 logger = logging.getLogger(__name__)
@@ -532,6 +549,623 @@ class ResearchAgent:
             }
         
         return {"action": "unknown_critique_type"}
+    
+    # ========================================================================
+    # Chat-Driven Interface
+    # ========================================================================
+    
+    async def process_message(self, message: str) -> ChatResponse:
+        """
+        Process a user message and return AI response.
+        
+        This is the main entry point for chat-driven research.
+        Parses intent and routes to appropriate handler.
+        
+        Args:
+            message: User's chat message.
+        
+        Returns:
+            AI response with action taken.
+        """
+        session = await self.get_session()
+        if not session:
+            # Auto-start a session if this looks like a search
+            intent = parse_intent(message)
+            if intent.type == "search" and intent.query:
+                session = await self.start_session(intent.query)
+            else:
+                return ChatResponse(
+                    message="Please start by telling me what topic you'd like to research. "
+                            "For example: 'search for quantum cryptography'",
+                    action_taken="prompt_for_topic",
+                )
+        
+        # Parse intent
+        intent = parse_intent(message)
+        logger.info(f"Parsed intent: {intent.type} (confidence: {intent.confidence})")
+        
+        # Save user message
+        await self._save_chat_message(ChatRole.USER, message, {"intent": intent.model_dump()})
+        
+        # Route to handler
+        try:
+            response = await self._handle_intent(intent, session)
+        except Exception as e:
+            logger.exception(f"Error handling intent: {e}")
+            response = ChatResponse(
+                message=f"I encountered an error: {str(e)}. Please try again.",
+                action_taken="error",
+            )
+        
+        # Save assistant response
+        await self._save_chat_message(
+            ChatRole.ASSISTANT,
+            response.message,
+            {
+                "action_taken": response.action_taken,
+                "papers_added": response.papers_added,
+            },
+        )
+        
+        return response
+    
+    async def _handle_intent(self, intent: Intent, session: ResearchSession) -> ChatResponse:
+        """Route intent to appropriate handler."""
+        match intent.type:
+            case "search":
+                return await self._handle_search(intent)
+            case "deepen":
+                return await self._handle_deepen(intent)
+            case "summarize":
+                return await self._handle_summarize(intent)
+            case "generate_outline":
+                return await self._handle_generate_outline_chat(intent)
+            case "add_section":
+                return await self._handle_add_section(intent)
+            case "edit_section":
+                return await self._handle_edit_section(intent)
+            case "link_source":
+                return await self._handle_link_source(intent)
+            case "find_gaps":
+                return await self._handle_find_gaps()
+            case "ask_question":
+                return await self._handle_question(intent)
+            case _:
+                return ChatResponse(
+                    message="I'm not sure what you'd like me to do. Try:\n"
+                            "- 'Search for [topic]' to find papers\n"
+                            "- 'Papers 3, 5 look interesting, find more like them'\n"
+                            "- 'Generate an outline from what we've found'\n"
+                            "- 'Which claims need more sources?'",
+                    action_taken="help",
+                )
+    
+    async def _handle_search(self, intent: Intent) -> ChatResponse:
+        """Handle search intent."""
+        query = intent.query or "the research topic"
+        
+        result = await self.explore(ExploreRequest(
+            topic=query,
+            guidance=intent.raw_message,
+            max_papers=10,
+            auto_ingest=True,
+        ))
+        
+        # Get display indices of new papers
+        papers_list = await self.get_papers_list()
+        new_indices = [p.index for p in papers_list[-result.papers_ingested:]]
+        
+        message_parts = [f"Found {result.papers_found} papers on '{query}'."]
+        
+        if result.papers_ingested > 0:
+            message_parts.append(f"Added {result.papers_ingested} to your research (#{new_indices[0]}-#{new_indices[-1] if new_indices else new_indices[0]}).")
+        
+        if result.summaries:
+            message_parts.append("\n\n**Key findings:**")
+            for summary in result.summaries[:3]:
+                message_parts.append(f"- {summary}")
+        
+        if result.suggested_subtopics:
+            message_parts.append(f"\n\n**Suggested directions:** {', '.join(result.suggested_subtopics[:3])}")
+        
+        return ChatResponse(
+            message="\n".join(message_parts),
+            action_taken="search",
+            papers_added=new_indices,
+            metadata={"subtopics": result.suggested_subtopics},
+        )
+    
+    async def _handle_deepen(self, intent: Intent) -> ChatResponse:
+        """Handle deepen intent - find more papers like specific ones."""
+        if not intent.paper_refs:
+            return ChatResponse(
+                message="Which papers would you like me to find more like? "
+                        "Reference them by number, e.g., 'find more like papers #3 and #7'",
+                action_taken="prompt_for_papers",
+            )
+        
+        # Get the referenced papers
+        papers = await self.get_papers_by_indices(intent.paper_refs)
+        if not papers:
+            return ChatResponse(
+                message=f"I couldn't find papers with indices {intent.paper_refs}. "
+                        "Check the Explore tab for available papers.",
+                action_taken="error",
+            )
+        
+        # Build a query from the paper titles
+        titles = [p.title for p in papers]
+        combined_query = " ".join(titles[:2])  # Use first 2 titles
+        
+        result = await self.deepen(DeepenRequest(
+            subtopic=intent.query or combined_query,
+            guidance=f"Find papers similar to: {', '.join(titles)}",
+            max_papers=5,
+        ))
+        
+        papers_list = await self.get_papers_list()
+        new_indices = [p.index for p in papers_list[-result.papers_ingested:]]
+        
+        return ChatResponse(
+            message=f"Based on papers {intent.paper_refs}, I found {result.papers_found} related papers "
+                    f"and added {result.papers_ingested} to your research.",
+            action_taken="deepen",
+            papers_added=new_indices,
+            papers_referenced=intent.paper_refs,
+        )
+    
+    async def _handle_summarize(self, intent: Intent) -> ChatResponse:
+        """Handle summarize intent."""
+        if intent.paper_refs:
+            papers = await self.get_papers_by_indices(intent.paper_refs)
+            if papers:
+                summaries = []
+                for p in papers:
+                    summaries.append(f"**#{p.index} {p.title}**\n{p.summary}")
+                return ChatResponse(
+                    message="\n\n".join(summaries),
+                    action_taken="summarize",
+                    papers_referenced=intent.paper_refs,
+                )
+        
+        # General summary of findings
+        tree = await self.get_knowledge_tree()
+        return ChatResponse(
+            message=f"Your research on '{tree.topic}' has {tree.total_sources} papers. "
+                    "Select specific papers to summarize, e.g., 'summarize paper #3'",
+            action_taken="summarize",
+        )
+    
+    async def _handle_generate_outline_chat(self, intent: Intent) -> ChatResponse:
+        """Handle outline generation via chat."""
+        result = await self.generate_outline(GenerateOutlineRequest(
+            focus_nodes=[],  # Use all nodes
+            max_sections=10,
+        ))
+        
+        return ChatResponse(
+            message=f"Generated an outline with {result.sections_created} sections "
+                    f"and {result.claims_created} claims. Check the Outline tab to review.",
+            action_taken="generate_outline",
+            sections_created=result.sections_created,
+            claims_created=result.claims_created,
+        )
+    
+    async def _handle_add_section(self, intent: Intent) -> ChatResponse:
+        """Handle adding a section to the outline."""
+        section_title = intent.query or "New Section"
+        
+        section_id = await self._create_outline_section(
+            title=section_title,
+            section_type="heading",
+            order_index=100,  # Will be sorted
+        )
+        
+        return ChatResponse(
+            message=f"Added section '{section_title}' to your outline. "
+                    "You can now add claims or link papers to it.",
+            action_taken="add_section",
+            metadata={"section_id": str(section_id)},
+        )
+    
+    async def _handle_edit_section(self, intent: Intent) -> ChatResponse:
+        """Handle editing a section."""
+        return ChatResponse(
+            message="To edit a section, please specify which section and what changes. "
+                    "For example: 'rename section 2 to Methods and Materials'",
+            action_taken="prompt_for_details",
+        )
+    
+    async def _handle_link_source(self, intent: Intent) -> ChatResponse:
+        """Handle linking a paper to a claim."""
+        if not intent.paper_refs:
+            return ChatResponse(
+                message="Which paper would you like to link? "
+                        "For example: 'link paper #5 to section 2'",
+                action_taken="prompt_for_papers",
+            )
+        
+        if not intent.section_ref:
+            return ChatResponse(
+                message=f"Which section should I link paper(s) {intent.paper_refs} to? "
+                        "For example: 'link paper #5 to section 2'",
+                action_taken="prompt_for_section",
+            )
+        
+        return ChatResponse(
+            message=f"Linked paper(s) {intent.paper_refs} to section {intent.section_ref}.",
+            action_taken="link_source",
+            papers_referenced=intent.paper_refs,
+        )
+    
+    async def _handle_find_gaps(self) -> ChatResponse:
+        """Handle finding claims that need more sources."""
+        outline = await self.get_outline_with_sources()
+        
+        gaps = []
+        for section in outline.sections:
+            for claim in section.claims:
+                if claim.needs_sources:
+                    gaps.append(f"- Section '{section.title}': \"{claim.claim_text[:50]}...\"")
+        
+        if not gaps:
+            return ChatResponse(
+                message="All claims have supporting sources. Great work!",
+                action_taken="find_gaps",
+            )
+        
+        return ChatResponse(
+            message=f"Found {len(gaps)} claims needing sources:\n\n" + "\n".join(gaps[:10]),
+            action_taken="find_gaps",
+            metadata={"gaps_count": len(gaps)},
+        )
+    
+    async def _handle_question(self, intent: Intent) -> ChatResponse:
+        """Handle general questions."""
+        # For now, provide helpful guidance
+        return ChatResponse(
+            message="I can help with:\n"
+                    "- **Searching**: 'search for [topic]'\n"
+                    "- **Exploring**: 'papers 3, 5 look good, find more like them'\n"
+                    "- **Outlining**: 'generate an outline'\n"
+                    "- **Linking**: 'link paper #5 to section 2'\n"
+                    "- **Gaps**: 'which claims need more sources?'\n\n"
+                    "What would you like to do?",
+            action_taken="help",
+        )
+    
+    # ========================================================================
+    # Chat Data Access Methods
+    # ========================================================================
+    
+    async def get_papers_list(self) -> list[PaperListItem]:
+        """
+        Get papers with display indices for Explore tab.
+        
+        Returns:
+            List of papers with indices for easy referencing.
+        """
+        session = await self.get_session()
+        if not session:
+            return []
+        
+        # Get source nodes with display indices
+        result = self.db.table("knowledge_node")\
+            .select("*, source:source_id(*)")\
+            .eq("session_id", str(self.session_id))\
+            .eq("node_type", NodeType.SOURCE.value)\
+            .eq("is_hidden", False)\
+            .order("display_index")\
+            .execute()
+        
+        papers = []
+        for row in result.data:
+            source = row.get("source") or {}
+            
+            # Parse authors
+            authors = []
+            for author in (source.get("authors") or []):
+                if isinstance(author, dict):
+                    authors.append(PaperAuthor(
+                        name=author.get("name", "Unknown"),
+                        affiliation=author.get("affiliation"),
+                    ))
+                else:
+                    authors.append(PaperAuthor(name=str(author)))
+            
+            papers.append(PaperListItem(
+                index=row.get("display_index") or len(papers) + 1,
+                paper_id=source.get("paper_id", ""),
+                node_id=UUID(row["id"]),
+                source_id=UUID(source["id"]) if source.get("id") else None,
+                title=row.get("title", source.get("title", "Unknown")),
+                authors=authors,
+                year=source.get("publication_year"),
+                summary=self._truncate(row.get("content") or source.get("abstract", ""), 100),
+                citation_count=source.get("citation_count"),
+                relevance_score=row.get("relevance_score", 0.0),
+                user_rating=row.get("user_rating"),
+                is_ingested=source.get("ingestion_status") == "ready",
+                pdf_url=source.get("pdf_url"),
+            ))
+        
+        return papers
+    
+    async def get_paper_details(self, index: int) -> Optional[PaperDetails]:
+        """Get full details for a paper by index."""
+        papers = await self.get_papers_list()
+        paper = next((p for p in papers if p.index == index), None)
+        
+        if not paper or not paper.source_id:
+            return None
+        
+        # Get full source info
+        result = self.db.table("source")\
+            .select("*")\
+            .eq("id", str(paper.source_id))\
+            .execute()
+        
+        if not result.data:
+            return None
+        
+        source = result.data[0]
+        
+        authors = []
+        for author in (source.get("authors") or []):
+            if isinstance(author, dict):
+                authors.append(PaperAuthor(
+                    name=author.get("name", "Unknown"),
+                    affiliation=author.get("affiliation"),
+                ))
+            else:
+                authors.append(PaperAuthor(name=str(author)))
+        
+        return PaperDetails(
+            index=paper.index,
+            paper_id=source.get("paper_id", ""),
+            node_id=paper.node_id,
+            source_id=paper.source_id,
+            title=source.get("title", "Unknown"),
+            authors=authors,
+            year=source.get("publication_year"),
+            abstract=source.get("abstract", ""),
+            venue=source.get("venue"),
+            doi=source.get("doi"),
+            citation_count=source.get("citation_count"),
+            pdf_url=source.get("pdf_url"),
+            is_ingested=source.get("ingestion_status") == "ready",
+            ingestion_status=source.get("ingestion_status"),
+            user_rating=paper.user_rating,
+        )
+    
+    async def get_papers_by_indices(self, indices: list[int]) -> list[PaperListItem]:
+        """Get papers by their display indices."""
+        papers = await self.get_papers_list()
+        return [p for p in papers if p.index in indices]
+    
+    async def get_outline_with_sources(self) -> OutlineWithSources:
+        """
+        Get outline with source information for the Outline tab.
+        
+        Returns:
+            Outline with sections, claims, and source badges.
+        """
+        session = await self.get_session()
+        if not session:
+            return OutlineWithSources(
+                project_id=self.project_id,
+                session_id=uuid4(),
+            )
+        
+        # Get outline sections
+        sections_result = self.db.table("outline_section")\
+            .select("*")\
+            .eq("project_id", str(self.project_id))\
+            .order("order_index")\
+            .execute()
+        
+        # Get all claims
+        claims_result = self.db.table("outline_claim")\
+            .select("*")\
+            .execute()
+        
+        # Build claims map by section
+        claims_by_section: dict[str, list[dict]] = {}
+        for claim in claims_result.data:
+            section_id = claim["section_id"]
+            if section_id not in claims_by_section:
+                claims_by_section[section_id] = []
+            claims_by_section[section_id].append(claim)
+        
+        # Get papers list for source badges
+        papers = await self.get_papers_list()
+        papers_by_node = {str(p.node_id): p for p in papers}
+        
+        sections = []
+        total_claims = 0
+        claims_with_sources = 0
+        claims_needing_sources = 0
+        
+        for section_data in sections_result.data:
+            section_claims = claims_by_section.get(section_data["id"], [])
+            
+            claims = []
+            for claim_data in sorted(section_claims, key=lambda c: c["order_index"]):
+                # Build source badges
+                source_badges = []
+                supporting = claim_data.get("supporting_nodes") or []
+                
+                for node_id in supporting:
+                    paper = papers_by_node.get(str(node_id))
+                    if paper:
+                        source_badges.append(SourceBadge(
+                            index=paper.index,
+                            paper_id=paper.paper_id,
+                            title=paper.title,
+                        ))
+                
+                needs_sources = len(source_badges) == 0
+                
+                claims.append(ClaimWithSources(
+                    id=UUID(claim_data["id"]),
+                    claim_text=claim_data["claim_text"],
+                    order_index=claim_data["order_index"],
+                    sources=source_badges,
+                    evidence_strength=claim_data.get("evidence_strength", "moderate"),
+                    needs_sources=needs_sources,
+                    user_critique=claim_data.get("user_critique"),
+                    status=claim_data.get("status", "draft"),
+                ))
+                
+                total_claims += 1
+                if source_badges:
+                    claims_with_sources += 1
+                else:
+                    claims_needing_sources += 1
+            
+            sections.append(SectionWithClaims(
+                id=UUID(section_data["id"]),
+                title=section_data["title"],
+                section_type=section_data.get("section_type", "heading"),
+                order_index=section_data["order_index"],
+                claims=claims,
+                total_claims=len(claims),
+                claims_with_sources=len([c for c in claims if c.sources]),
+                claims_needing_sources=len([c for c in claims if c.needs_sources]),
+            ))
+        
+        return OutlineWithSources(
+            project_id=self.project_id,
+            session_id=self.session_id or uuid4(),
+            sections=sections,
+            total_sections=len(sections),
+            total_claims=total_claims,
+            claims_with_sources=claims_with_sources,
+            claims_needing_sources=claims_needing_sources,
+        )
+    
+    async def get_knowledge_tree_graph(self) -> KnowledgeTreeGraph:
+        """
+        Get knowledge tree for graph visualization.
+        
+        Returns:
+            Tree with nodes and edges for visualization.
+        """
+        session = await self.get_session()
+        if not session:
+            return KnowledgeTreeGraph(
+                session_id=uuid4(),
+                topic="",
+            )
+        
+        # Get all nodes
+        result = self.db.table("knowledge_node")\
+            .select("*")\
+            .eq("session_id", str(self.session_id))\
+            .eq("is_hidden", False)\
+            .execute()
+        
+        nodes = []
+        edges = []
+        papers_count = 0
+        topics_count = 0
+        
+        # Color map for node types
+        colors = {
+            NodeType.TOPIC.value: "#3B82F6",    # Blue
+            NodeType.SOURCE.value: "#10B981",   # Green
+            NodeType.CLAIM.value: "#F59E0B",    # Yellow
+            NodeType.SUMMARY.value: "#8B5CF6",  # Purple
+            NodeType.QUESTION.value: "#EC4899", # Pink
+        }
+        
+        for row in result.data:
+            node_type = row["node_type"]
+            
+            # Create label (short version for graph display)
+            title = row["title"]
+            if len(title) > 30:
+                label = title[:27] + "..."
+            else:
+                label = title
+            
+            # Add year for source nodes
+            if node_type == NodeType.SOURCE.value:
+                papers_count += 1
+                paper_index = row.get("display_index")
+                if paper_index:
+                    label = f"#{paper_index}: {label}"
+            elif node_type == NodeType.TOPIC.value:
+                topics_count += 1
+            
+            nodes.append(TreeNode(
+                id=row["id"],
+                label=label,
+                title=title,
+                node_type=node_type,
+                size=15 if node_type == NodeType.TOPIC.value else 10,
+                color=colors.get(node_type, "#6B7280"),
+                paper_index=row.get("display_index"),
+                user_rating=row.get("user_rating"),
+            ))
+            
+            # Create edge to parent
+            if row.get("parent_node_id"):
+                edges.append(TreeEdge(
+                    source=row["parent_node_id"],
+                    target=row["id"],
+                    relationship="parent",
+                ))
+        
+        return KnowledgeTreeGraph(
+            session_id=self.session_id,
+            topic=session.topic,
+            nodes=nodes,
+            edges=edges,
+            total_papers=papers_count,
+            total_topics=topics_count,
+        )
+    
+    async def get_chat_history(self, limit: int = 50) -> list[ChatMessage]:
+        """Get chat history for the session."""
+        if not self.session_id:
+            return []
+        
+        result = self.db.table("chat_message")\
+            .select("*")\
+            .eq("session_id", str(self.session_id))\
+            .order("created_at", desc=False)\
+            .limit(limit)\
+            .execute()
+        
+        return [ChatMessage(**row) for row in result.data]
+    
+    async def _save_chat_message(
+        self,
+        role: ChatRole,
+        content: str,
+        metadata: Optional[dict] = None,
+    ) -> UUID:
+        """Save a chat message."""
+        if not self.session_id:
+            return uuid4()
+        
+        result = self.db.table("chat_message").insert({
+            "session_id": str(self.session_id),
+            "role": role.value,
+            "content": content,
+            "metadata": metadata or {},
+        }).execute()
+        
+        if result.data:
+            return UUID(result.data[0]["id"])
+        return uuid4()
+    
+    def _truncate(self, text: str, max_length: int) -> str:
+        """Truncate text to max length."""
+        if len(text) <= max_length:
+            return text
+        return text[:max_length - 3] + "..."
     
     # ========================================================================
     # Private Helpers
