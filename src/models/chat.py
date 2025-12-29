@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.models.source import Author
+
 
 # ============================================================================
 # Chat Messages
