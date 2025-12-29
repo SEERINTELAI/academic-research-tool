@@ -230,11 +230,44 @@ window.__TEST_HARNESS__.clearNetworkHistory()
 # Connectivity tests (always pass even without DB)
 pytest tests/e2e/test_connectivity.py -v
 
-# Full E2E tests (require Supabase)
+# Full lifecycle E2E tests (require Supabase)
+pytest tests/e2e/test_full_lifecycle.py -v
+
+# All E2E tests (require Supabase)
 pytest tests/e2e/ -v
 
 # All tests
 pytest tests/ -v
+```
+
+### Full Lifecycle Test Coverage
+
+The `test_full_lifecycle.py` test suite covers the complete research workflow:
+
+| Test | Coverage |
+|------|----------|
+| `test_01_create_project` | Create a new research project |
+| `test_02_search_papers` | Search for papers via chat |
+| `test_03_ingest_papers` | Ingest papers to the library |
+| `test_04_verify_library` | Verify sources in library with topic grouping |
+| `test_05_verify_citation_tree` | Verify knowledge tree with citation edges |
+| `test_06_generate_outline` | Generate outline via chat |
+| `test_07_verify_outline_sources` | Verify outline sections have linked sources |
+| `test_08_critique_outline` | AI critique and update outline sections |
+| `test_09_generate_paper_draft` | Generate paper from outline |
+| `test_10_verify_citations` | Verify paper has proper citations |
+
+### Report Generation API
+
+```bash
+# Generate paper from outline
+POST /api/projects/{id}/report/generate
+
+# Get generated report
+GET /api/projects/{id}/report
+
+# Generate individual section
+POST /api/projects/{id}/report/sections/{section_id}/write
 ```
 
 ## Contributing

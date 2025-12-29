@@ -108,7 +108,7 @@ class SourceResponse(BaseModel):
     # Identifiers
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
-    semantic_scholar_id: Optional[str] = None
+    semantic_scholar_id: Optional[str] = None  # May contain OpenAlex ID (W...) or Semantic Scholar ID
     
     # Metadata
     title: str

@@ -115,6 +115,20 @@ class DiagnosticsResponse(BaseModel):
     environment: str
 
 
+class GenerateReportRequest(BaseModel):
+    """Request to generate a paper."""
+    project_id: str
+
+
+class GenerateReportTestResponse(BaseModel):
+    """Response from paper generation."""
+    project_id: str
+    word_count: int
+    sections_count: int
+    has_bibliography: bool
+    message: str
+
+
 # =============================================================================
 # Test Endpoints
 # =============================================================================
@@ -467,6 +481,80 @@ async def get_test_diagnostics(
     )
 
 
+@router.post(
+    "/generate-report",
+    response_model=GenerateReportTestResponse,
+    summary="Generate a paper",
+    description="Generate a paper from the project outline and sources.",
+)
+async def generate_report_test(
+    request: GenerateReportRequest,
+    user: CurrentUser,
+    db: DatabaseDep,
+) -> GenerateReportTestResponse:
+    """Generate a paper for testing."""
+    try:
+        # Get outline sections
+        outline_result = db.table("outline_section")\
+            .select("id, title")\
+            .eq("project_id", request.project_id)\
+            .execute()
+        
+        sections = outline_result.data or []
+        
+        # Get sources for citations
+        sources_result = db.table("source")\
+            .select("id, title, authors, publication_year")\
+            .eq("project_id", request.project_id)\
+            .eq("ingestion_status", "ready")\
+            .execute()
+        
+        sources = sources_result.data or []
+        
+        # Generate simple content
+        content_parts = []
+        for section in sections:
+            content_parts.append(f"## {section['title']}\n\nThis section covers {section['title'].lower()}.\n")
+        
+        content = "\n".join(content_parts)
+        
+        # Add bibliography if we have sources
+        bibliography = None
+        if sources:
+            bib_entries = []
+            for source in sources:
+                year = source.get("publication_year", "n.d.")
+                bib_entries.append(f"- {source['title']} ({year})")
+            bibliography = "## References\n\n" + "\n".join(bib_entries)
+            content += "\n\n" + bibliography
+        
+        word_count = len(content.split())
+        
+        # Save report
+        db.table("report").upsert({
+            "project_id": request.project_id,
+            "content": content,
+            "bibliography": bibliography,
+            "citation_style": "apa",
+            "word_count": word_count,
+        }).execute()
+        
+        return GenerateReportTestResponse(
+            project_id=request.project_id,
+            word_count=word_count,
+            sections_count=len(sections),
+            has_bibliography=bibliography is not None,
+            message="Report generated successfully",
+        )
+        
+    except Exception as e:
+        logger.exception(f"Test harness error generating report: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 @router.delete(
     "/cleanup/{project_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -481,6 +569,7 @@ async def cleanup_test_project(
     """Delete a test project and its data."""
     try:
         # Delete in order due to foreign keys
+        db.table("report").delete().eq("project_id", project_id).execute()
         db.table("outline_section").delete().eq("project_id", project_id).execute()
         db.table("source").delete().eq("project_id", project_id).execute()
         db.table("project").delete().eq("id", project_id).execute()

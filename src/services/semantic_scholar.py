@@ -276,6 +276,56 @@ class SemanticScholarClient:
             logger.warning(f"HTTP error getting references: {e}")
             return []
     
+    async def get_paper_references_with_external_ids(
+        self, paper_id: str, limit: int = 100
+    ) -> list[dict]:
+        """
+        Get references with external IDs (DOI, arXiv) for matching.
+        
+        Args:
+            paper_id: Semantic Scholar paper ID, DOI, or arXiv ID.
+            limit: Maximum number of references to fetch.
+        
+        Returns:
+            List of dicts with paperId, doi, and arxiv_id for each reference.
+        """
+        if not self._client:
+            raise SemanticScholarError("Client not initialized. Use async context manager.")
+        
+        try:
+            response = await self._client.get(
+                f"/paper/{paper_id}/references",
+                params={
+                    "fields": "paperId,externalIds",
+                    "limit": limit,
+                },
+            )
+            
+            if response.status_code == 404:
+                return []
+            
+            if response.status_code != 200:
+                logger.warning(f"Error getting references for {paper_id}: {response.status_code}")
+                return []
+            
+            data = response.json()
+            references = []
+            for item in data.get("data", []):
+                cited_paper = item.get("citedPaper", {})
+                if cited_paper:
+                    external_ids = cited_paper.get("externalIds") or {}
+                    references.append({
+                        "paper_id": cited_paper.get("paperId"),
+                        "doi": external_ids.get("DOI"),
+                        "arxiv_id": external_ids.get("ArXiv"),
+                    })
+            
+            return references
+            
+        except httpx.HTTPError as e:
+            logger.warning(f"HTTP error getting references: {e}")
+            return []
+    
     def _parse_paper(self, data: dict) -> PaperSearchResult:
         """
         Parse API response into PaperSearchResult.

@@ -501,7 +501,7 @@ class ResearchAgent:
         for section_data in outline_structure:
             section_id = await self._create_outline_section(
                 title=section_data["title"],
-                section_type=section_data.get("type", "heading"),
+                section_type=section_data.get("type", "custom"),
                 order_index=sections_created,
             )
             sections_created += 1
@@ -821,7 +821,7 @@ class ResearchAgent:
         
         section_id = await self._create_outline_section(
             title=section_title,
-            section_type="heading",
+            section_type="custom",
             order_index=100,  # Will be sorted
         )
         
@@ -1106,7 +1106,7 @@ class ResearchAgent:
             sections.append(SectionWithClaims(
                 id=UUID(section_data["id"]),
                 title=section_data["title"],
-                section_type=section_data.get("section_type", "heading"),
+                section_type=section_data.get("section_type", "custom"),
                 order_index=section_data["order_index"],
                 claims=claims,
                 total_claims=len(claims),
@@ -1233,42 +1233,43 @@ class ResearchAgent:
                         continue
                     
                     try:
-                        # Get references (papers this paper cites)
-                        references = await ss_client.get_paper_references(ss_paper_id)
+                        # Get references with external IDs (DOI, arXiv) for efficient matching
+                        references = await ss_client.get_paper_references_with_external_ids(ss_paper_id)
                         
                         if not references:
                             continue
                         
-                        # For each reference, check if it's in our library
-                        # We need to look up each reference to get its DOI/arXiv ID
-                        for ref_ss_id in references[:50]:  # Limit to 50 to avoid rate limits
-                            # Check if this SS ID is directly in our lookup
-                            if ref_ss_id in ss_id_to_source:
+                        # Match references against our library by DOI or arXiv
+                        for ref in references[:50]:  # Limit to 50 to avoid rate limits
+                            ref_doi = ref.get("doi")
+                            ref_arxiv = ref.get("arxiv_id")
+                            ref_ss_id = ref.get("paper_id")
+                            
+                            # Try DOI match first (most reliable)
+                            if ref_doi and ref_doi.lower() in doi_to_source:
+                                edges.append(TreeEdge(
+                                    source=paper["id"],
+                                    target=doi_to_source[ref_doi.lower()],
+                                    relationship="cites",
+                                ))
+                                continue
+                            
+                            # Try arXiv ID match
+                            if ref_arxiv and ref_arxiv.lower() in arxiv_to_source:
+                                edges.append(TreeEdge(
+                                    source=paper["id"],
+                                    target=arxiv_to_source[ref_arxiv.lower()],
+                                    relationship="cites",
+                                ))
+                                continue
+                            
+                            # Try Semantic Scholar ID match (if we have it stored)
+                            if ref_ss_id and ref_ss_id in ss_id_to_source:
                                 edges.append(TreeEdge(
                                     source=paper["id"],
                                     target=ss_id_to_source[ref_ss_id],
                                     relationship="cites",
                                 ))
-                                continue
-                            
-                            # Try to get DOI/arXiv of the referenced paper
-                            try:
-                                ref_paper = await ss_client.get_paper(ref_ss_id)
-                                if ref_paper.doi and ref_paper.doi.lower() in doi_to_source:
-                                    edges.append(TreeEdge(
-                                        source=paper["id"],
-                                        target=doi_to_source[ref_paper.doi.lower()],
-                                        relationship="cites",
-                                    ))
-                                elif ref_paper.arxiv_id and ref_paper.arxiv_id.lower() in arxiv_to_source:
-                                    edges.append(TreeEdge(
-                                        source=paper["id"],
-                                        target=arxiv_to_source[ref_paper.arxiv_id.lower()],
-                                        relationship="cites",
-                                    ))
-                            except Exception:
-                                # Paper not found or rate limited
-                                continue
                                 
                     except Exception as e:
                         logger.warning(f"Failed to get references for {ss_paper_id}: {e}")
@@ -1390,6 +1391,8 @@ class ResearchAgent:
         )
         
         # Map OpenAlex fields to our schema
+        # Note: openalex_id column may not exist in older DB schemas, so we store in semantic_scholar_id
+        # The paper_id from OpenAlex (e.g., "W4214950786") is stored for reference
         data = {
             "project_id": str(self.project_id),
             "title": paper.get("title", "Unknown"),
@@ -1400,7 +1403,7 @@ class ResearchAgent:
             "arxiv_id": paper.get("arxiv_id"),  # Store arXiv ID for PDF download
             "pdf_url": paper.get("pdf_url"),
             "ingestion_status": "pending",
-            # Map external ID to semantic_scholar_id column (works for any external ID)
+            # Store external ID in semantic_scholar_id column (works for OpenAlex or SS IDs)
             "semantic_scholar_id": paper.get("paper_id"),
             # Map venue to journal column
             "journal": paper.get("venue"),
