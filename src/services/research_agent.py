@@ -471,8 +471,21 @@ class ResearchAgent:
         # Get knowledge tree
         tree = await self.get_knowledge_tree()
         
-        if tree.total_nodes == 0:
-            raise ResearchAgentError("No knowledge nodes to generate outline from")
+        # Check if we have knowledge nodes OR library papers
+        has_knowledge_nodes = tree.total_nodes > 0
+        
+        # Also check for library papers (ingested sources)
+        library_count = self.db.table("source")\
+            .select("id", count="exact")\
+            .eq("project_id", str(self.project_id))\
+            .eq("ingestion_status", "ready")\
+            .execute()
+        has_library_papers = (library_count.count or 0) > 0
+        
+        if not has_knowledge_nodes and not has_library_papers:
+            raise ResearchAgentError(
+                "No papers to generate outline from. Please search for papers or ingest some first."
+            )
         
         # Use AI to cluster and structure
         outline_structure = await self._generate_outline_structure(
@@ -1464,8 +1477,7 @@ class ResearchAgent:
         topic: str,
         max_sections: int,
     ) -> list[dict]:
-        """Generate outline structure from nodes."""
-        # Simple structure - TODO: use AI for clustering
+        """Generate outline structure from nodes using library papers."""
         
         # Group nodes by type
         sources = [n for n in nodes if n.node_type == NodeType.SOURCE]
@@ -1484,23 +1496,85 @@ class ResearchAgent:
             },
         ]
         
-        # Add sections for each topic node
-        for topic_node in topics[:max_sections - 2]:
-            section = {
-                "title": topic_node.title,
-                "type": "heading",
-                "claims": [],
-            }
+        # If we have topic nodes, use them for structure
+        if topics:
+            for topic_node in topics[:max_sections - 2]:
+                section = {
+                    "title": topic_node.title,
+                    "type": "heading",
+                    "claims": [],
+                }
+                
+                # Find sources under this topic
+                child_sources = [n for n in sources if n.parent_node_id == topic_node.id]
+                for source in child_sources[:3]:
+                    section["claims"].append({
+                        "text": source.title,
+                        "supporting_nodes": [str(source.id)],
+                    })
+                
+                outline.append(section)
+        else:
+            # No topic nodes - use source nodes directly
+            # Get library papers to create thematic sections
+            library_papers = self.db.table("source")\
+                .select("id, title, topic, abstract")\
+                .eq("project_id", str(self.project_id))\
+                .eq("ingestion_status", "ready")\
+                .execute().data
             
-            # Find sources under this topic
-            child_sources = [n for n in sources if n.parent_node_id == topic_node.id]
-            for source in child_sources[:3]:
-                section["claims"].append({
-                    "text": source.title,
-                    "supporting_nodes": [str(source.id)],
-                })
+            if library_papers:
+                # Group papers by topic (if classified) or create "Literature Review"
+                topics_map: dict[str, list[dict]] = {}
+                for paper in library_papers:
+                    paper_topic = paper.get("topic") or "Literature Review"
+                    if paper_topic not in topics_map:
+                        topics_map[paper_topic] = []
+                    topics_map[paper_topic].append(paper)
+                
+                # Create sections for each topic group
+                for section_topic, papers in list(topics_map.items())[:max_sections - 2]:
+                    section = {
+                        "title": section_topic,
+                        "type": "heading",
+                        "claims": [],
+                    }
+                    
+                    for paper in papers[:5]:  # Max 5 papers per section
+                        # Create a claim based on the paper's abstract or title
+                        abstract = paper.get("abstract") or ""
+                        if abstract and len(abstract) > 100:
+                            claim_text = abstract[:200] + "..."
+                        else:
+                            claim_text = f"Key findings from: {paper['title']}"
+                        
+                        # Find the knowledge node for this source
+                        source_node = next(
+                            (n for n in sources if n.source_id and str(n.source_id) == paper["id"]),
+                            None
+                        )
+                        
+                        section["claims"].append({
+                            "text": claim_text,
+                            "supporting_nodes": [str(source_node.id)] if source_node else [],
+                        })
+                    
+                    if section["claims"]:  # Only add if has claims
+                        outline.append(section)
             
-            outline.append(section)
+            # If still no sections, create one from knowledge nodes
+            if len(outline) == 1 and sources:
+                section = {
+                    "title": "Literature Review",
+                    "type": "heading",
+                    "claims": [],
+                }
+                for source in sources[:max_sections * 2]:
+                    section["claims"].append({
+                        "text": source.title,
+                        "supporting_nodes": [str(source.id)],
+                    })
+                outline.append(section)
         
         # Add conclusion
         outline.append({

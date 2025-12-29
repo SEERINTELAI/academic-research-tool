@@ -62,8 +62,10 @@ INTENT_KEYWORDS = {
         "explain", "describe", "overview of",
     ],
     "generate_outline": [
-        "generate outline", "create outline", "make outline", "build outline",
+        "generate outline", "generate an outline", "create outline", "create an outline",
+        "make outline", "make an outline", "build outline", "build an outline",
         "outline from", "draft outline", "suggest outline", "start outline",
+        "write outline", "write an outline", "outline based on", "create the outline",
     ],
     "add_section": [
         "add section", "new section", "add a section", "include section",
