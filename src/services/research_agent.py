@@ -226,28 +226,46 @@ class ResearchAgent:
         ingested_count = 0
         nodes_created = 0
         
+        # Get current max display_index for this session
+        existing_nodes = self.db.table("knowledge_node")\
+            .select("display_index")\
+            .eq("session_id", str(self.session_id))\
+            .order("display_index", desc=True)\
+            .limit(1)\
+            .execute()
+        
+        next_index = 1
+        if existing_nodes.data and existing_nodes.data[0].get("display_index"):
+            next_index = existing_nodes.data[0]["display_index"] + 1
+        
         for paper in relevant_papers[:request.max_papers]:
             try:
+                logger.info(f"Processing paper: {paper.get('title', 'Unknown')[:50]}...")
+                
                 # Create source in database
                 source_id = await self._create_source(paper)
+                logger.info(f"Created source with id: {source_id}")
                 
                 # Ingest into RAG if auto_ingest enabled
                 if request.auto_ingest and paper.get("pdf_url"):
                     await self._ingest_paper(source_id, paper)
                     ingested_count += 1
                 
-                # Create knowledge node
+                # Create knowledge node with display_index
                 node = await self._create_knowledge_node(
                     node_type=NodeType.SOURCE,
                     title=paper.get("title", "Unknown"),
                     content=paper.get("abstract", ""),
                     source_id=source_id,
                     confidence=paper.get("relevance_score", 0.7),
+                    display_index=next_index,
                 )
+                logger.info(f"Created knowledge node #{next_index} with id: {node.id}")
                 nodes_created += 1
+                next_index += 1
                 
             except Exception as e:
-                logger.warning(f"Failed to process paper: {e}")
+                logger.exception(f"Failed to process paper '{paper.get('title', 'Unknown')[:50]}': {e}")
                 continue
         
         # 4. Generate summaries of findings
@@ -1175,8 +1193,10 @@ class ResearchAgent:
             return UUID(result.data[0]["id"])
         return uuid4()
     
-    def _truncate(self, text: str, max_length: int) -> str:
+    def _truncate(self, text: Optional[str], max_length: int) -> str:
         """Truncate text to max length."""
+        if not text:
+            return ""
         if len(text) <= max_length:
             return text
         return text[:max_length - 3] + "..."
@@ -1220,14 +1240,23 @@ class ResearchAgent:
         # Sort by relevance
         scored.sort(key=lambda p: p["relevance_score"], reverse=True)
         
-        # Return papers with relevance > 0.3
-        return [p for p in scored if p["relevance_score"] > 0.3]
+        # Return papers with relevance > 0.1 (low threshold - let more through)
+        # Prioritize having papers to work with over strict filtering
+        relevant = [p for p in scored if p["relevance_score"] > 0.1]
+        
+        # If nothing passes threshold, return top half anyway
+        if not relevant and scored:
+            logger.info("No papers passed relevance threshold, returning top half")
+            relevant = scored[:len(scored)//2 + 1]
+        
+        logger.info(f"Filtered {len(papers)} papers to {len(relevant)} relevant ones")
+        return relevant
     
     async def _create_source(self, paper: dict) -> UUID:
         """Create a source record from a paper."""
-        result = self.db.table("source").insert({
+        # Map OpenAlex fields to our schema
+        data = {
             "project_id": str(self.project_id),
-            "paper_id": paper.get("paper_id"),
             "title": paper.get("title", "Unknown"),
             "authors": paper.get("authors", []),
             "abstract": paper.get("abstract"),
@@ -1235,7 +1264,17 @@ class ResearchAgent:
             "doi": paper.get("doi"),
             "pdf_url": paper.get("pdf_url"),
             "ingestion_status": "pending",
-        }).execute()
+            # Map external ID to semantic_scholar_id column (works for any external ID)
+            "semantic_scholar_id": paper.get("paper_id"),
+            # Map venue to journal column
+            "journal": paper.get("venue"),
+            "citation_count": paper.get("citation_count"),
+        }
+        
+        # Remove None values to avoid Supabase issues
+        data = {k: v for k, v in data.items() if v is not None}
+        
+        result = self.db.table("source").insert(data).execute()
         
         if not result.data:
             raise ResearchAgentError("Failed to create source")
@@ -1272,9 +1311,10 @@ class ResearchAgent:
         source_id: Optional[UUID] = None,
         parent_id: Optional[UUID] = None,
         confidence: float = 0.5,
+        display_index: Optional[int] = None,
     ) -> KnowledgeNode:
         """Create a knowledge node."""
-        result = self.db.table("knowledge_node").insert({
+        data = {
             "session_id": str(self.session_id),
             "source_id": str(source_id) if source_id else None,
             "parent_node_id": str(parent_id) if parent_id else None,
@@ -1282,7 +1322,11 @@ class ResearchAgent:
             "title": title,
             "content": content,
             "confidence": confidence,
-        }).execute()
+        }
+        if display_index is not None:
+            data["display_index"] = display_index
+        
+        result = self.db.table("knowledge_node").insert(data).execute()
         
         if not result.data:
             raise ResearchAgentError("Failed to create knowledge node")

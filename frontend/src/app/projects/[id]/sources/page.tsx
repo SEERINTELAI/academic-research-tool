@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Search,
-  Plus,
   ExternalLink,
   FileText,
   Loader2,
@@ -15,16 +13,17 @@ import {
   Download,
   Trash2,
   Network,
+  RefreshCw,
+  MessageSquare,
 } from 'lucide-react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { api, PaperSearchResult, Source } from '@/lib/api';
 import { useAuthStore, useSourcesStore, useProjectStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -32,66 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-function SearchResultCard({
-  paper,
-  onAdd,
-  isAdding,
-}: {
-  paper: PaperSearchResult;
-  onAdd: (paperId: string) => void;
-  isAdding: boolean;
-}) {
-  return (
-    <Card className="border-border/50">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 space-y-2">
-            <h4 className="font-serif font-semibold leading-snug">{paper.title}</h4>
-            <p className="text-sm text-muted-foreground">
-              {paper.authors?.slice(0, 3).map((a) => a.name).join(', ')}
-              {paper.authors?.length > 3 && ` +${paper.authors.length - 3} more`}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {paper.year && <Badge variant="secondary">{paper.year}</Badge>}
-              {paper.venue && (
-                <span className="max-w-[200px] truncate">{paper.venue}</span>
-              )}
-              {paper.citation_count !== null && (
-                <span>{paper.citation_count} citations</span>
-              )}
-            </div>
-            {paper.abstract && (
-              <p className="line-clamp-2 text-sm text-muted-foreground">
-                {paper.abstract}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              size="sm"
-              onClick={() => onAdd(paper.paper_id)}
-              disabled={isAdding}
-            >
-              {isAdding ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
-            {paper.pdf_url && (
-              <Button size="sm" variant="outline" asChild>
-                <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 const statusConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
   pending: { icon: Clock, color: 'text-muted-foreground', label: 'Pending' },
@@ -184,6 +123,39 @@ function SourceCard({
   );
 }
 
+function SearchResultCard({
+  paper,
+  onAdd,
+  isAdding,
+}: {
+  paper: PaperSearchResult;
+  onAdd: (paperId: string) => void;
+  isAdding: boolean;
+}) {
+  return (
+    <Card className="border-border/50">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <h4 className="font-serif font-semibold leading-snug">{paper.title}</h4>
+            <p className="text-sm text-muted-foreground">
+              {paper.authors?.slice(0, 3).map((a) => a.name).join(', ')}
+              {paper.authors?.length > 3 && ` +${paper.authors.length - 3} more`}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => onAdd(paper.paper_id)}
+            disabled={isAdding}
+          >
+            {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SourcesPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -192,45 +164,23 @@ export default function SourcesPage() {
   const token = useAuthStore((s) => s.token);
   const project = useProjectStore((s) => s.currentProject);
   const sources = useSourcesStore((s) => s.sources);
+  const setSources = useSourcesStore((s) => s.setSources);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<PaperSearchResult[]>([]);
-  const [addingPaperId, setAddingPaperId] = useState<string | null>(null);
   const [ingestingSourceId, setIngestingSourceId] = useState<string | null>(null);
   const [discoverySourceId, setDiscoverySourceId] = useState<string | null>(null);
+  const [addingPaperId, setAddingPaperId] = useState<string | null>(null);
 
   const authToken = token || 'demo-token';
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    
-    setIsSearching(true);
-    try {
-      const result = await api.searchPapers(authToken, searchQuery);
-      setSearchResults(result.results);
-    } catch (error) {
-      toast.error('Search failed. Please try again.');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const addMutation = useMutation({
-    mutationFn: (paperId: string) => {
-      setAddingPaperId(paperId);
-      return api.addSource(authToken, projectId, paperId);
+  // Fetch sources - this updates the store
+  const { isLoading: isLoadingSources, refetch: refetchSources } = useQuery({
+    queryKey: ['sources', projectId],
+    queryFn: async () => {
+      const data = await api.getSources(authToken, projectId);
+      setSources(data);
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources', projectId] });
-      toast.success('Paper added to sources');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to add paper');
-    },
-    onSettled: () => {
-      setAddingPaperId(null);
-    },
+    enabled: !!projectId,
   });
 
   const ingestMutation = useMutation({
@@ -239,7 +189,7 @@ export default function SourcesPage() {
       return api.ingestSource(authToken, projectId, sourceId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources', projectId] });
+      refetchSources();
       toast.success('Ingestion started');
     },
     onError: (error: Error) => {
@@ -254,11 +204,28 @@ export default function SourcesPage() {
     mutationFn: (sourceId: string) =>
       api.deleteSource(authToken, projectId, sourceId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources', projectId] });
+      refetchSources();
       toast.success('Source deleted');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete source');
+    },
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (paperId: string) => {
+      setAddingPaperId(paperId);
+      return api.addSource(authToken, projectId, paperId);
+    },
+    onSuccess: () => {
+      refetchSources();
+      toast.success('Paper added to sources');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to add paper');
+    },
+    onSettled: () => {
+      setAddingPaperId(null);
     },
   });
 
@@ -275,94 +242,61 @@ export default function SourcesPage() {
 
   return (
     <div className="page-transition p-6">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold">{project?.title}</h1>
-        <p className="mt-1 text-muted-foreground">
-          Manage your research sources • {sources.length} papers ({ingestedCount} ingested)
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl font-bold">{project?.title}</h1>
+          <p className="mt-1 text-muted-foreground">
+            Your research sources • {sources.length} papers ({ingestedCount} ingested)
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => refetchSources()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+          <Button asChild>
+            <Link href={`/projects/${projectId}/research`}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Search Papers
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="library" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="library">Library ({sources.length})</TabsTrigger>
-          <TabsTrigger value="search">Search Papers</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="library" className="space-y-4">
-          {sources.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {sources.map((source) => (
-                <SourceCard
-                  key={source.id}
-                  source={source}
-                  onIngest={(id) => ingestMutation.mutate(id)}
-                  onDelete={(id) => deleteMutation.mutate(id)}
-                  onDiscover={(id) => setDiscoverySourceId(id)}
-                  isIngesting={ingestingSourceId === source.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <Card className="border-dashed">
-              <CardContent className="py-12 text-center">
-                <FileText className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mb-2 font-serif text-lg font-semibold">No sources yet</h3>
-                <p className="text-sm text-muted-foreground">
-                  Search for papers and add them to your library.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="search" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-serif">Search Academic Papers</CardTitle>
-              <CardDescription>
-                Search Semantic Scholar for relevant research papers.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g., machine learning healthcare diagnosis"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
-                <Button onClick={handleSearch} disabled={isSearching}>
-                  {isSearching ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {searchResults.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-serif text-lg font-semibold">
-                Results ({searchResults.length})
-              </h3>
-              <ScrollArea className="h-[500px]">
-                <div className="space-y-3 pr-4">
-                  {searchResults.map((paper) => (
-                    <SearchResultCard
-                      key={paper.paper_id}
-                      paper={paper}
-                      onAdd={(id) => addMutation.mutate(id)}
-                      isAdding={addingPaperId === paper.paper_id}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      {isLoadingSources ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : sources.length > 0 ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {sources.map((source) => (
+            <SourceCard
+              key={source.id}
+              source={source}
+              onIngest={(id) => ingestMutation.mutate(id)}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onDiscover={(id) => setDiscoverySourceId(id)}
+              isIngesting={ingestingSourceId === source.id}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <FileText className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mb-2 font-serif text-lg font-semibold">No sources yet</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Use the Research tab to search for papers and build your knowledge base.
+            </p>
+            <Button asChild>
+              <Link href={`/projects/${projectId}/research`}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Start Researching
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Discovery Dialog */}
       <Dialog
@@ -381,55 +315,45 @@ export default function SourcesPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : discoveryData ? (
-            <Tabs defaultValue="references">
-              <TabsList className="w-full">
-                <TabsTrigger value="references" className="flex-1">
-                  References ({discoveryData.references?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="citations" className="flex-1">
-                  Cited By ({discoveryData.citations?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="related" className="flex-1">
-                  Similar ({discoveryData.related?.length || 0})
-                </TabsTrigger>
-              </TabsList>
-              <ScrollArea className="mt-4 h-[400px]">
-                <TabsContent value="references" className="mt-0 space-y-2">
-                  {discoveryData.references?.map((paper) => (
-                    <SearchResultCard
-                      key={paper.paper_id}
-                      paper={paper}
-                      onAdd={(id) => addMutation.mutate(id)}
-                      isAdding={addingPaperId === paper.paper_id}
-                    />
-                  ))}
-                </TabsContent>
-                <TabsContent value="citations" className="mt-0 space-y-2">
-                  {discoveryData.citations?.map((paper) => (
-                    <SearchResultCard
-                      key={paper.paper_id}
-                      paper={paper}
-                      onAdd={(id) => addMutation.mutate(id)}
-                      isAdding={addingPaperId === paper.paper_id}
-                    />
-                  ))}
-                </TabsContent>
-                <TabsContent value="related" className="mt-0 space-y-2">
-                  {discoveryData.related?.map((paper) => (
-                    <SearchResultCard
-                      key={paper.paper_id}
-                      paper={paper}
-                      onAdd={(id) => addMutation.mutate(id)}
-                      isAdding={addingPaperId === paper.paper_id}
-                    />
-                  ))}
-                </TabsContent>
-              </ScrollArea>
-            </Tabs>
+            <div className="space-y-4">
+              {discoveryData.references && discoveryData.references.length > 0 && (
+                <div>
+                  <h4 className="mb-2 font-semibold">References ({discoveryData.references.length})</h4>
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-2">
+                      {discoveryData.references.map((paper) => (
+                        <SearchResultCard
+                          key={paper.paper_id}
+                          paper={paper}
+                          onAdd={(id) => addMutation.mutate(id)}
+                          isAdding={addingPaperId === paper.paper_id}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+              {discoveryData.citations && discoveryData.citations.length > 0 && (
+                <div>
+                  <h4 className="mb-2 font-semibold">Cited By ({discoveryData.citations.length})</h4>
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-2">
+                      {discoveryData.citations.map((paper) => (
+                        <SearchResultCard
+                          key={paper.paper_id}
+                          paper={paper}
+                          onAdd={(id) => addMutation.mutate(id)}
+                          isAdding={addingPaperId === paper.paper_id}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
