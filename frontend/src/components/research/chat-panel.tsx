@@ -12,8 +12,8 @@ import {
   Hash,
   Copy,
   Check,
-  Download,
-  DownloadOff,
+  CloudUpload,
+  CloudOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ChatMessage, ChatResponse, PaperListItem } from '@/lib/api';
@@ -288,9 +288,9 @@ export function ChatPanel({ projectId, selectedPaper, onPaperMention }: ChatPane
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
                     {autoIngest ? (
-                      <Download className="h-4 w-4 text-green-500" />
+                      <CloudUpload className="h-4 w-4 text-green-500" />
                     ) : (
-                      <DownloadOff className="h-4 w-4 text-muted-foreground" />
+                      <CloudOff className="h-4 w-4 text-muted-foreground" />
                     )}
                   </span>
                   <Switch

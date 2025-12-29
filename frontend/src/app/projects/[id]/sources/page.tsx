@@ -176,7 +176,7 @@ export default function SourcesPage() {
   const { isLoading: isLoadingSources, refetch: refetchSources } = useQuery({
     queryKey: ['sources', projectId],
     queryFn: async () => {
-      const data = await api.getSources(authToken, projectId);
+      const data = await api.listSources(authToken, projectId);
       setSources(data);
       return data;
     },
