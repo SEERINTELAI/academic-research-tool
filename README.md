@@ -19,10 +19,8 @@ A tight loop between outlining, researching, synthesizing sources, and collabora
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Frontend (Next.js)                      │
-│  - Monaco Editor (writing interface)                        │
-│  - Outline Panel                                            │
-│  - Source Library                                           │
-│  - Research Chat                                            │
+│  - Research Tab (Explore, Knowledge Tree, Outline, Chat)   │
+│  - Write Tab (Monaco Editor with AI assist)                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                          REST API
@@ -135,17 +133,22 @@ academic-research-tool/
 | AR4: Report Writing | ✅ MVP | Monaco editor, AI assist, citation insertion |
 | AR5: Citation Management | 🔜 Partial | Basic citations, full formatting pending |
 
-### Frontend Features (AR4)
+### Frontend Features
 
-- **Project Management**: Create, list, archive projects
-- **Outline Editor**: Hierarchical section management with types
-- **Sources Library**: Search papers, add to project, ingest to LightRAG
-- **Discovery Panel**: Explore references, citations, and related papers
-- **Monaco Editor**: Professional writing interface with:
-  - AI Writing Assist (RAG-powered)
-  - Click-to-cite from sources panel
-  - Auto-save (Cmd+S)
-- **Research Chat**: Ask questions about ingested papers
+The UI has two main tabs per project:
+
+#### Research Tab
+- **Chat AI**: Natural language interface ("search for quantum cryptography", "generate outline")
+- **Explore Panel**: Indexed list of papers (#1, #2...) found during research
+- **Knowledge Tree**: Visual graph of papers and topics
+- **Outline Panel**: AI-generated or manual outline with source-linked claims
+- **Ingestion**: Papers are automatically ingested when found (if PDF available)
+
+#### Write Tab
+- **Monaco Editor**: Professional writing interface
+- **AI Writing Assist**: RAG-powered suggestions based on your research
+- **Citation Insertion**: Click-to-cite from your sources
+- **Auto-save**: Cmd+S or auto-save on changes
 
 ## Key Technologies
 

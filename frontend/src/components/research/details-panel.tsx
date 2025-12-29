@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X,
   ExternalLink,
@@ -15,7 +15,9 @@ import {
   Quote,
   AlertCircle,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, PaperListItem, PaperDetails, ClaimWithSources, SectionWithClaims } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -45,11 +47,30 @@ function PaperDetailsView({
   onChatInsert?: (text: string) => void;
 }) {
   const token = useAuthStore((s) => s.token) || 'demo-token';
+  const queryClient = useQueryClient();
 
   const { data: details, isLoading } = useQuery({
     queryKey: ['paper-details', projectId, paper.index],
     queryFn: () => api.getPaperDetails(token, projectId, paper.index),
     enabled: !!paper,
+  });
+
+  const ingestMutation = useMutation({
+    mutationFn: () => {
+      if (!paper.source_id) {
+        throw new Error('No source ID for this paper');
+      }
+      return api.ingestSource(token, projectId, paper.source_id);
+    },
+    onSuccess: () => {
+      toast.success('Ingestion started! The paper will be processed shortly.');
+      // Refresh the papers list and details
+      queryClient.invalidateQueries({ queryKey: ['research-papers', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['paper-details', projectId, paper.index] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to start ingestion');
+    },
   });
 
   if (isLoading) {
@@ -94,6 +115,22 @@ function PaperDetailsView({
               <ExternalLink className="h-3 w-3 mr-1" />
               View PDF
             </a>
+          </Button>
+        )}
+        {/* Ingest button for papers that aren't ingested yet */}
+        {!displayData.is_ingested && paper.source_id && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => ingestMutation.mutate()}
+            disabled={ingestMutation.isPending}
+          >
+            {ingestMutation.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3 mr-1" />
+            )}
+            Ingest Paper
           </Button>
         )}
       </div>

@@ -79,12 +79,29 @@ flowchart TB
 
 ### Frontend (Next.js)
 
+The UI is organized into two main tabs per project:
+
+| Tab | Components | Purpose |
+|-----|------------|---------|
+| **Research** | Chat, Explore, Tree, Outline | AI-driven research workflow |
+| **Write** | Monaco Editor | Document composition |
+
+#### Research Tab Components
+
+| Component | Purpose |
+|-----------|---------|
+| Chat Panel | Natural language AI interface for research commands |
+| Explore Panel | Indexed list of papers found during research |
+| Knowledge Tree | Visual graph of papers and topics |
+| Outline Panel | AI-generated outline with source-linked claims |
+
+#### Write Tab Components
+
 | Component | Purpose |
 |-----------|---------|
 | Monaco Editor | Rich text writing interface |
-| Outline Panel | Structure research sections |
-| Source Library | Manage ingested papers |
-| Research Chat | Query papers, get cited answers |
+| AI Assist | RAG-powered writing suggestions |
+| Citation Panel | Click-to-cite from research sources |
 
 ### Backend (FastAPI)
 
