@@ -93,11 +93,13 @@ function SearchResultCard({
   );
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
   pending: { icon: Clock, color: 'text-muted-foreground', label: 'Pending' },
   downloading: { icon: Download, color: 'text-blue-500', label: 'Downloading' },
+  parsing: { icon: Loader2, color: 'text-blue-500', label: 'Parsing' },
+  chunking: { icon: Loader2, color: 'text-yellow-500', label: 'Chunking' },
   ingesting: { icon: Loader2, color: 'text-yellow-500', label: 'Ingesting' },
-  completed: { icon: CheckCircle2, color: 'text-green-500', label: 'Ready' },
+  ready: { icon: CheckCircle2, color: 'text-green-500', label: 'Ready' },
   failed: { icon: AlertCircle, color: 'text-destructive', label: 'Failed' },
 };
 
@@ -158,7 +160,7 @@ function SourceCard({
                 )}
               </Button>
             )}
-            {source.ingestion_status === 'completed' && (
+            {source.ingestion_status === 'ready' && (
               <Button
                 size="sm"
                 variant="outline"
@@ -269,7 +271,7 @@ export default function SourcesPage() {
     enabled: !!discoverySourceId,
   });
 
-  const ingestedCount = sources.filter((s) => s.ingestion_status === 'completed').length;
+  const ingestedCount = sources.filter((s) => s.ingestion_status === 'ready').length;
 
   return (
     <div className="page-transition p-6">

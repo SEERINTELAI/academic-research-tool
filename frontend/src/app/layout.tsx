@@ -5,6 +5,7 @@ import { Providers } from "@/components/providers";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { DiagnosticsPanel } from "@/components/diagnostics-panel";
 
 const crimsonPro = Crimson_Pro({
   subsets: ["latin"],
@@ -47,6 +48,7 @@ export default function RootLayout({
             </SidebarInset>
           </SidebarProvider>
           <Toaster />
+          <DiagnosticsPanel />
         </Providers>
       </body>
     </html>

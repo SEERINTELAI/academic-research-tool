@@ -175,7 +175,7 @@ function SourcesPanel({
   sources: Source[];
   onInsertCitation: (source: Source) => void;
 }) {
-  const ingestedSources = sources.filter((s) => s.ingestion_status === 'completed');
+  const ingestedSources = sources.filter((s) => s.ingestion_status === 'ready');
 
   return (
     <Card className="h-full">

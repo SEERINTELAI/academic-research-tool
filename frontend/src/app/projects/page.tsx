@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 function ProjectCard({ project }: { project: Project }) {
-  const statusColors = {
+  const statusColors: Record<string, string> = {
+    draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
     active: 'bg-green-500/10 text-green-700 dark:text-green-400',
     archived: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
     completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',

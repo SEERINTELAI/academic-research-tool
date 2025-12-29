@@ -173,7 +173,7 @@ export default function ResearchPage() {
 
   const authToken = token || 'demo-token';
 
-  const ingestedSources = sources.filter((s) => s.ingestion_status === 'completed');
+  const ingestedSources = sources.filter((s) => s.ingestion_status === 'ready');
 
   const queryMutation = useMutation({
     mutationFn: (query: string) =>
