@@ -137,16 +137,15 @@ async def get_project(
         result = db.table("project")\
             .select("*")\
             .eq("id", str(project_id))\
-            .maybe_single()\
             .execute()
         
-        if not result.data:
+        if not result.data or len(result.data) == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found",
             )
         
-        return ProjectResponse(**result.data)
+        return ProjectResponse(**result.data[0])
         
     except HTTPException:
         raise

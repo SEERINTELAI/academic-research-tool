@@ -11,6 +11,7 @@ from typing import Optional
 from uuid import UUID
 
 from src.config import get_settings
+from src.models.hyperion import ChunkReference as HyperionChunk
 from src.models.research import (
     CitationStyle,
     QueryMode,
@@ -133,27 +134,31 @@ class QueryService:
     
     async def _parse_sources(
         self,
-        raw_sources: list[dict],
+        raw_sources: list[HyperionChunk],
     ) -> list[SourceReference]:
         """Parse and enrich source references from Hyperion response."""
         sources = []
         
-        for raw in raw_sources:
-            doc_name = raw.get("documentName", "")
+        for chunk in raw_sources:
+            # ChunkReference is a Pydantic model with doc_name, text_preview, relevance_score
+            doc_name = chunk.doc_name if isinstance(chunk, HyperionChunk) else str(chunk)
             
             # Parse doc_name format: source_id[:8]_cXXX_section_type
             parts = doc_name.split("_")
             if len(parts) >= 3:
                 source_id_prefix = parts[0]
-                chunk_index = parts[1].replace("c", "")
                 section_type = "_".join(parts[2:])
             else:
                 source_id_prefix = doc_name
-                chunk_index = "0"
                 section_type = "unknown"
             
             # Look up full source info
             source_info = await self._lookup_source(source_id_prefix)
+            
+            # Get text preview from the chunk
+            text_preview = ""
+            if isinstance(chunk, HyperionChunk):
+                text_preview = chunk.text_preview or ""
             
             if source_info:
                 source = SourceReference(
@@ -163,7 +168,17 @@ class QueryService:
                     publication_year=source_info.get("publication_year"),
                     doi=source_info.get("doi"),
                     section_title=section_type.replace("_", " ").title(),
-                    retrieved_text=raw.get("text", ""),
+                    retrieved_text=text_preview,
+                )
+                sources.append(source)
+            else:
+                # Create a minimal reference even without database lookup
+                source = SourceReference(
+                    source_id=source_id_prefix,
+                    title=doc_name,
+                    authors=[],
+                    section_title=section_type.replace("_", " ").title(),
+                    retrieved_text=text_preview,
                 )
                 sources.append(source)
         
