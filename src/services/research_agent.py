@@ -52,7 +52,7 @@ from src.services.ak_client import AKClient
 from src.services.database import get_supabase_client
 from src.services.hyperion_client import HyperionClient
 from src.services.intent_parser import Intent, parse_intent
-from src.services.semantic_scholar import SemanticScholarClient
+from src.services.openalex import OpenAlexClient, OpenAlexPaper
 
 logger = logging.getLogger(__name__)
 
@@ -181,15 +181,29 @@ class ResearchAgent:
         
         topic = request.topic or session.topic
         
-        # 1. Search for papers
+        # 1. Search for papers using OpenAlex (free, no rate limits)
         logger.info(f"Searching for papers on: {topic}")
-        async with SemanticScholarClient() as scholar:
-            search_result = await scholar.search(
+        async with OpenAlexClient() as openalex:
+            search_result = await openalex.search(
                 query=topic,
                 limit=request.max_papers * 2,  # Get extra to filter
             )
         
-        papers = search_result.results
+        # Convert OpenAlex papers to dict format for compatibility
+        papers = [
+            {
+                "paper_id": p.paper_id,
+                "title": p.title,
+                "authors": [{"name": a.name, "author_id": a.author_id} for a in p.authors],
+                "abstract": p.abstract,
+                "year": p.year,
+                "venue": p.venue,
+                "citation_count": p.citation_count,
+                "doi": p.doi,
+                "pdf_url": p.pdf_url or p.open_access_url,
+            }
+            for p in search_result.results
+        ]
         logger.info(f"Found {len(papers)} papers")
         
         if not papers:
