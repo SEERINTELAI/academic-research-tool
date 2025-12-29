@@ -6,7 +6,7 @@ This package contains all API routes and dependencies.
 
 from fastapi import APIRouter
 
-from src.api.routes import health, projects, outline, sources, research, discovery, logs
+from src.api.routes import health, projects, outline, sources, research, discovery, logs, research_agent
 
 # Create main API router
 api_router = APIRouter()
@@ -50,6 +50,13 @@ api_router.include_router(
     discovery.router,
     prefix="/projects/{project_id}/sources",
     tags=["discovery"],
+)
+
+# AI Research Agent routes
+api_router.include_router(
+    research_agent.router,
+    prefix="/projects/{project_id}/agent",
+    tags=["research-agent"],
 )
 
 # Frontend logging endpoint (no auth required)
