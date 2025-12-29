@@ -52,16 +52,18 @@ Academic paper search, retrieval, and PDF parsing.
 
 | ID | Feature | Status | Priority |
 |----|---------|--------|----------|
-| AR2.1 | Paper Search (Semantic Scholar) | 🔜 pending | P0 |
+| AR2.1 | Paper Search (Semantic Scholar) | ✅ complete | P0 |
 | AR2.2 | Paper Search (OpenAlex) | 🔜 pending | P1 |
 | AR2.3 | Paper Search (arXiv) | 🔜 pending | P1 |
-| AR2.4 | PDF Download & GROBID Parsing | 🔜 pending | P0 |
-| AR2.5 | Chunk by Section | 🔜 pending | P0 |
-| AR2.6 | Ingest to Hyperion RAG | 🔜 pending | P0 |
+| AR2.4 | PDF Download & LightRAG Parsing | ✅ complete | P0 |
+| AR2.5 | Chunk by Section | ✅ complete | P0 |
+| AR2.6 | Ingest to Hyperion RAG | ✅ complete | P0 |
 
 **Wave**: 2b  
 **Dependencies**: Hyperion validation  
 **See**: [features/AR2_research_ingestion/](features/AR2_research_ingestion/)
+
+**Implementation Notes**: LightRAG handles PDF parsing and chunking automatically via `/documents/upload`. GROBID deprecated.
 
 ---
 
@@ -71,8 +73,8 @@ Query papers via Hyperion, get cited answers.
 
 | ID | Feature | Status | Priority |
 |----|---------|--------|----------|
-| AR3.1 | Basic Query Interface | 🔜 pending | P0 |
-| AR3.2 | Multi-Paper Query | 🔜 pending | P0 |
+| AR3.1 | Basic Query Interface | ✅ complete | P0 |
+| AR3.2 | Multi-Paper Query | ✅ complete | P0 |
 | AR3.3 | Compare Findings | 🔜 pending | P1 |
 | AR3.4 | Summarize Paper | 🔜 pending | P1 |
 | AR3.5 | Query with Context | 🔜 pending | P2 |
@@ -80,6 +82,8 @@ Query papers via Hyperion, get cited answers.
 **Wave**: 2c  
 **Dependencies**: AR2.6 (ingestion working)  
 **See**: [features/AR3_synthesis_rag/](features/AR3_synthesis_rag/)
+
+**Implementation Notes**: QueryService uses HyperionClient for RAG queries. Supports hybrid/local/global/naive modes. Knowledge tree discovery via DiscoveryService.
 
 ---
 
@@ -89,15 +93,22 @@ Collaborative editor with AI assistance.
 
 | ID | Feature | Status | Priority |
 |----|---------|--------|----------|
-| AR4.1 | Basic Editor (Monaco) | 🔜 pending | P0 |
-| AR4.2 | AI Writing Assist | 🔜 pending | P0 |
-| AR4.3 | Auto-Insert Citations | 🔜 pending | P0 |
+| AR4.1 | Basic Editor (Monaco) | ✅ complete | P0 |
+| AR4.2 | AI Writing Assist | ✅ complete | P0 |
+| AR4.3 | Auto-Insert Citations | ✅ complete | P0 |
 | AR4.4 | Section-Aware Suggestions | 🔜 pending | P1 |
 | AR4.5 | Draft Versioning | 🔜 pending | P2 |
 
 **Wave**: 3a  
 **Dependencies**: AR3.1 (query working)  
 **See**: [features/AR4_report_writing/](features/AR4_report_writing/)
+
+**Implementation Notes (2025-12-28)**:
+- Next.js 16 frontend with shadcn/ui components
+- Monaco editor with markdown support, custom academic theme
+- AI assist panel using RAG queries via `/research/query`
+- Citation insertion from sources panel with (Author, Year) format
+- Warm paper-like theme (light) / Deep library aesthetic (dark)
 
 ---
 
@@ -136,14 +147,14 @@ Wave 1: Foundation ✅
 ├── FastAPI project structure ✅
 └── Connect Hyperion RAG to AlphaKernel ✅
 
-Wave 2: Core Pipeline
-├── 2a: Outline (AR1.1, AR1.2)
-├── 2b: Ingestion (AR2.1, AR2.4, AR2.5, AR2.6)
-└── 2c: Synthesis (AR3.1, AR3.2)
+Wave 2: Core Pipeline ✅
+├── 2a: Outline (AR1.1) ✅
+├── 2b: Ingestion (AR2.1, AR2.4, AR2.5, AR2.6) ✅
+└── 2c: Synthesis (AR3.1, AR3.2) ✅
 
 Wave 3: Writing & Citations
-├── 3a: Editor (AR4.1, AR4.2, AR4.3)
-└── 3b: Citations (AR5.1, AR5.2, AR5.3)
+├── 3a: Editor (AR4.1, AR4.2, AR4.3) ✅
+└── 3b: Citations (AR5.1, AR5.2, AR5.3) 🔜
 
 Wave 4: Polish
 ├── Additional search sources

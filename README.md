@@ -38,14 +38,13 @@ A tight loop between outlining, researching, synthesizing sources, and collabora
               │               │               │
               ▼               ▼               ▼
 ┌───────────────────┐ ┌───────────────┐ ┌───────────────┐
-│   Hyperion MCP    │ │   External    │ │   Supabase    │
-│   (LightRAG)      │ │   APIs        │ │   Database    │
-│   - Ingest        │ │   - Semantic  │ │   - Projects  │
-│   - Query         │ │     Scholar   │ │   - Sources   │
-│   - Delete        │ │   - OpenAlex  │ │   - Citations │
+│   LightRAG        │ │   External    │ │   Supabase    │
+│   (Hyperion)      │ │   APIs        │ │   Database    │
+│   - PDF Upload    │ │   - Semantic  │ │   - Projects  │
+│   - Auto-chunk    │ │     Scholar   │ │   - Sources   │
+│   - Query + KG    │ │   - OpenAlex  │ │   - Citations │
 └───────────────────┘ │   - arXiv     │ │   - Reports   │
-                      │   - GROBID    │ └───────────────┘
-                      └───────────────┘
+                      └───────────────┘ └───────────────┘
 ```
 
 ## Quick Start
@@ -130,18 +129,31 @@ academic-research-tool/
 
 | Category | Status | Features |
 |----------|--------|----------|
-| AR1: Outline Formation | 🔜 Planned | 4 features |
-| AR2: Research & Ingestion | 🔜 Planned | 6 features |
-| AR3: Synthesis (RAG) | 🔜 Planned | 5 features |
-| AR4: Report Writing | 🔜 Planned | 5 features |
-| AR5: Citation Management | 🔜 Planned | 4 features |
+| AR1: Outline Formation | ✅ Basic | Create/edit outline sections |
+| AR2: Research & Ingestion | ✅ Done | Semantic Scholar search, PDF ingest via LightRAG |
+| AR3: Synthesis (RAG) | ✅ Done | RAG query interface, knowledge tree discovery |
+| AR4: Report Writing | ✅ MVP | Monaco editor, AI assist, citation insertion |
+| AR5: Citation Management | 🔜 Partial | Basic citations, full formatting pending |
+
+### Frontend Features (AR4)
+
+- **Project Management**: Create, list, archive projects
+- **Outline Editor**: Hierarchical section management with types
+- **Sources Library**: Search papers, add to project, ingest to LightRAG
+- **Discovery Panel**: Explore references, citations, and related papers
+- **Monaco Editor**: Professional writing interface with:
+  - AI Writing Assist (RAG-powered)
+  - Click-to-cite from sources panel
+  - Auto-save (Cmd+S)
+- **Research Chat**: Ask questions about ingested papers
 
 ## Key Technologies
 
-- **RAG**: Hyperion MCP → LightRAG (graph-based RAG)
-- **PDF Parsing**: GROBID (academic PDF extraction)
-- **Academic APIs**: Semantic Scholar, OpenAlex, arXiv
-- **LLM**: Claude API
+- **RAG**: LightRAG (graph-based RAG with automatic chunking)
+  - Web UI: http://5.78.148.113:9621 (Documents, Knowledge Graph)
+  - Handles PDF parsing, chunking, and indexing automatically
+- **Academic APIs**: Semantic Scholar (paper search + citation graph)
+- **LLM**: Claude API (via Cursor/AK)
 - **Database**: Supabase (PostgreSQL)
 - **Frontend**: Next.js, Monaco Editor
 - **Backend**: FastAPI

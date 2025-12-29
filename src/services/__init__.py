@@ -22,34 +22,24 @@ from src.services.hyperion_client import (
     hyperion_query,
     hyperion_ingest,
     hyperion_delete,
+    hyperion_upload_pdf,
+    hyperion_pipeline_status,
 )
 from src.services.semantic_scholar import (
     SemanticScholarClient,
     SemanticScholarError,
     search_papers,
 )
-from src.services.grobid_client import (
-    GrobidClient,
-    GrobidError,
-    ParsedPaper,
-    Section,
-    SectionType,
-    parse_pdf,
-)
 from src.services.pdf_processor import (
-    PDFProcessor,
+    PDFDownloader,
     PDFProcessorError,
-    process_source,
-    download_and_parse_pdf,
-)
-from src.services.chunker import (
-    Chunker,
-    chunk_paper,
+    download_pdf,
 )
 from src.services.ingestion import (
     IngestionService,
     IngestionError,
-    ingest_source as ingest_source_to_rag,
+    ingest_source,
+    get_pipeline_status,
 )
 from src.services.query_service import (
     QueryService,
@@ -83,29 +73,21 @@ __all__ = [
     "hyperion_query",
     "hyperion_ingest",
     "hyperion_delete",
+    "hyperion_upload_pdf",
+    "hyperion_pipeline_status",
     # Semantic Scholar
     "SemanticScholarClient",
     "SemanticScholarError",
     "search_papers",
-    # GROBID
-    "GrobidClient",
-    "GrobidError",
-    "ParsedPaper",
-    "Section",
-    "SectionType",
-    "parse_pdf",
-    # PDF Processor
-    "PDFProcessor",
+    # PDF Downloader
+    "PDFDownloader",
     "PDFProcessorError",
-    "process_source",
-    "download_and_parse_pdf",
-    # Chunker
-    "Chunker",
-    "chunk_paper",
+    "download_pdf",
     # Ingestion
     "IngestionService",
     "IngestionError",
-    "ingest_source_to_rag",
+    "ingest_source",
+    "get_pipeline_status",
     # Query
     "QueryService",
     "QueryError",
@@ -117,4 +99,3 @@ __all__ = [
     "discover_citations",
     "explore_knowledge_tree",
 ]
-

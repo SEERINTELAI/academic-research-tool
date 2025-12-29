@@ -1,10 +1,8 @@
 """
 PDF Processor for academic papers.
 
-Handles:
-1. PDF download from arXiv, Unpaywall, direct URLs
-2. GROBID parsing for structure extraction
-3. Coordination with source ingestion pipeline
+Simplified version: downloads PDFs only.
+LightRAG handles parsing and chunking automatically.
 """
 
 import logging
@@ -15,9 +13,6 @@ from uuid import UUID
 import httpx
 
 from src.config import get_settings
-from src.models.source import Author, IngestionStatus
-from src.services.database import get_supabase_client
-from src.services.grobid_client import GrobidClient, GrobidError, ParsedPaper
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +33,33 @@ class PDFProcessorError(Exception):
         super().__init__(self.message)
 
 
-class PDFProcessor:
+class PDFDownloader:
     """
-    Processor for downloading and parsing academic PDFs.
+    Downloads academic PDFs from various sources.
+    
+    Tries multiple sources:
+    1. Direct URL
+    2. arXiv
+    3. Unpaywall (for OA PDFs via DOI)
     
     Usage:
-        processor = PDFProcessor()
-        paper = await processor.process_source(source_id)
+        downloader = PDFDownloader()
+        pdf_bytes = await downloader.download(url, arxiv_id, doi)
     """
     
     def __init__(self, timeout: float = 60.0):
         """
-        Initialize PDF processor.
+        Initialize PDF downloader.
         
         Args:
             timeout: Download timeout in seconds.
         """
         self.settings = get_settings()
         self.timeout = timeout
-        self.db = get_supabase_client()
     
-    async def download_pdf(
+    async def download(
         self,
-        url: str,
+        url: Optional[str] = None,
         arxiv_id: Optional[str] = None,
         doi: Optional[str] = None,
     ) -> bytes:
@@ -81,7 +80,7 @@ class PDFProcessor:
             PDF content as bytes.
         
         Raises:
-            PDFProcessorError: If download fails.
+            PDFProcessorError: If download fails from all sources.
         """
         async with httpx.AsyncClient(
             timeout=self.timeout,
@@ -97,6 +96,7 @@ class PDFProcessor:
                     if response.status_code == 200:
                         content_type = response.headers.get("content-type", "")
                         if "pdf" in content_type or url.endswith(".pdf"):
+                            logger.info(f"Downloaded {len(response.content)} bytes from URL")
                             return response.content
                         else:
                             logger.warning(f"URL didn't return PDF: {content_type}")
@@ -114,6 +114,7 @@ class PDFProcessor:
                     response = await client.get(arxiv_url)
                     
                     if response.status_code == 200:
+                        logger.info(f"Downloaded {len(response.content)} bytes from arXiv")
                         return response.content
                 except httpx.HTTPError as e:
                     logger.warning(f"arXiv download failed: {e}")
@@ -127,6 +128,7 @@ class PDFProcessor:
                         response = await client.get(oa_url)
                         
                         if response.status_code == 200:
+                            logger.info(f"Downloaded {len(response.content)} bytes from Unpaywall")
                             return response.content
                 except httpx.HTTPError as e:
                     logger.warning(f"Unpaywall download failed: {e}")
@@ -172,166 +174,45 @@ class PDFProcessor:
         
         return None
     
-    async def parse_pdf(self, pdf_content: bytes) -> ParsedPaper:
+    def generate_filename(
+        self,
+        title: Optional[str] = None,
+        arxiv_id: Optional[str] = None,
+        doi: Optional[str] = None,
+    ) -> str:
         """
-        Parse PDF using GROBID.
+        Generate a filename for the PDF.
         
         Args:
-            pdf_content: PDF bytes.
+            title: Paper title.
+            arxiv_id: arXiv ID.
+            doi: DOI.
         
         Returns:
-            ParsedPaper with extracted structure.
+            Sanitized filename with .pdf extension.
         """
-        async with GrobidClient() as grobid:
-            return await grobid.parse_pdf(pdf_content)
-    
-    async def process_source(self, source_id: UUID) -> ParsedPaper:
-        """
-        Process a source: download PDF, parse with GROBID.
-        
-        Updates source status in database during processing.
-        
-        Args:
-            source_id: Source ID from database.
-        
-        Returns:
-            ParsedPaper with extracted content.
-        
-        Raises:
-            PDFProcessorError: If processing fails.
-        """
-        # Get source from database
-        source_result = self.db.table("source")\
-            .select("*")\
-            .eq("id", str(source_id))\
-            .single()\
-            .execute()
-        
-        if not source_result.data:
-            raise PDFProcessorError(f"Source not found: {source_id}", source_id)
-        
-        source = source_result.data
-        
-        try:
-            # Update status to downloading
-            self._update_source_status(source_id, IngestionStatus.DOWNLOADING)
-            
-            # Download PDF
-            pdf_content = await self.download_pdf(
-                url=source.get("pdf_url"),
-                arxiv_id=source.get("arxiv_id"),
-                doi=source.get("doi"),
-            )
-            
-            logger.info(f"Downloaded PDF for {source_id}: {len(pdf_content)} bytes")
-            
-            # Update status to parsing
-            self._update_source_status(source_id, IngestionStatus.PARSING)
-            
-            # Parse with GROBID
-            paper = await self.parse_pdf(pdf_content)
-            
-            logger.info(
-                f"Parsed {source_id}: {paper.title}, "
-                f"{len(paper.sections)} sections, "
-                f"{len(paper.references)} references"
-            )
-            
-            # Update source with parsed metadata if we got better data
-            self._update_source_metadata(source_id, paper)
-            
-            return paper
-            
-        except GrobidError as e:
-            self._update_source_status(
-                source_id,
-                IngestionStatus.FAILED,
-                error_message=f"GROBID parsing failed: {e.message}",
-            )
-            raise PDFProcessorError(f"GROBID error: {e.message}", source_id)
-            
-        except PDFProcessorError as e:
-            self._update_source_status(
-                source_id,
-                IngestionStatus.FAILED,
-                error_message=e.message,
-            )
-            raise
-            
-        except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
-            logger.exception(error_msg)
-            self._update_source_status(
-                source_id,
-                IngestionStatus.FAILED,
-                error_message=error_msg,
-            )
-            raise PDFProcessorError(error_msg, source_id)
-    
-    def _update_source_status(
-        self,
-        source_id: UUID,
-        status: IngestionStatus,
-        error_message: Optional[str] = None,
-    ) -> None:
-        """Update source ingestion status in database."""
-        update_data = {"ingestion_status": status.value}
-        if error_message:
-            update_data["error_message"] = error_message
-        
-        self.db.table("source")\
-            .update(update_data)\
-            .eq("id", str(source_id))\
-            .execute()
-    
-    def _update_source_metadata(
-        self,
-        source_id: UUID,
-        paper: ParsedPaper,
-    ) -> None:
-        """Update source metadata from parsed paper."""
-        update_data = {}
-        
-        # Only update if GROBID found better data
-        if paper.title:
-            update_data["title"] = paper.title
-        
-        if paper.authors:
-            update_data["authors"] = [
-                {
-                    "name": a.full_name,
-                    "affiliation": a.affiliation,
-                }
-                for a in paper.authors
-            ]
-        
-        if paper.abstract:
-            update_data["abstract"] = paper.abstract
-        
-        if paper.keywords:
-            update_data["keywords"] = paper.keywords
-        
-        if update_data:
-            self.db.table("source")\
-                .update(update_data)\
-                .eq("id", str(source_id))\
-                .execute()
+        if title:
+            # Sanitize title for filename
+            safe_title = re.sub(r'[^\w\s-]', '', title)
+            safe_title = re.sub(r'\s+', '_', safe_title)
+            safe_title = safe_title[:100]  # Limit length
+            return f"{safe_title}.pdf"
+        elif arxiv_id:
+            clean_id = arxiv_id.replace("arXiv:", "").replace("/", "_")
+            return f"arxiv_{clean_id}.pdf"
+        elif doi:
+            clean_doi = doi.replace("/", "_").replace(":", "_")
+            return f"doi_{clean_doi}.pdf"
+        else:
+            return "document.pdf"
 
 
-# Convenience functions
-async def download_and_parse_pdf(
-    url: str,
+# Convenience function
+async def download_pdf(
+    url: Optional[str] = None,
     arxiv_id: Optional[str] = None,
     doi: Optional[str] = None,
-) -> ParsedPaper:
-    """Download and parse a PDF."""
-    processor = PDFProcessor()
-    pdf_content = await processor.download_pdf(url, arxiv_id, doi)
-    return await processor.parse_pdf(pdf_content)
-
-
-async def process_source(source_id: UUID) -> ParsedPaper:
-    """Process a source by ID."""
-    processor = PDFProcessor()
-    return await processor.process_source(source_id)
-
+) -> bytes:
+    """Download a PDF from various sources."""
+    downloader = PDFDownloader()
+    return await downloader.download(url, arxiv_id, doi)

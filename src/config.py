@@ -66,14 +66,20 @@ class Settings(BaseSettings):
         description="Claude model to use"
     )
     
+    # LightRAG Direct API
+    lightrag_url: str = Field(
+        default="http://5.78.148.113:9621",
+        description="LightRAG API URL for direct PDF upload"
+    )
+    lightrag_api_key: Optional[str] = Field(
+        default=None,
+        description="LightRAG API key (from n8n credential vault)"
+    )
+    
     # External APIs
     semantic_scholar_api_key: Optional[str] = Field(
         default=None,
         description="Semantic Scholar API key (optional, increases rate limit)"
-    )
-    grobid_url: str = Field(
-        default="https://kermitt2-grobid.hf.space",
-        description="GROBID service URL for PDF parsing"
     )
     
     # Rate Limiting

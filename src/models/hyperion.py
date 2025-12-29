@@ -91,3 +91,28 @@ class DeleteResult(BaseModel):
     deleted_count: int = 0
     error: Optional[str] = None
 
+
+class UploadResult(BaseModel):
+    """Result of PDF upload operation."""
+    
+    success: bool
+    filename: str
+    doc_id: Optional[str] = None
+    track_id: Optional[str] = None
+    status: str = "pending"  # pending, processing, completed, failed
+    error: Optional[str] = None
+
+
+class PipelineStatus(BaseModel):
+    """Status of the LightRAG processing pipeline."""
+    
+    busy: bool = False
+    job_name: Optional[str] = None
+    job_start: Optional[str] = None
+    docs_count: int = 0
+    batches: int = 0
+    current_batch: int = 0
+    latest_message: Optional[str] = None
+    autoscanned: bool = False
+    request_pending: bool = False
+

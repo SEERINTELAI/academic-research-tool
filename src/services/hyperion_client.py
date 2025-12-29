@@ -10,6 +10,9 @@ import logging
 import re
 from typing import Optional
 
+import httpx
+
+from src.config import get_settings
 from src.models.hyperion import (
     DeleteResult,
     DocumentStatus,
@@ -17,12 +20,17 @@ from src.models.hyperion import (
     HyperionDocumentList,
     IngestRequest,
     IngestResult,
+    PipelineStatus,
     QueryResult,
     ChunkReference,
+    UploadResult,
 )
 from src.services.ak_client import AKClient, AKError, call_ak
 
 logger = logging.getLogger(__name__)
+
+
+# LightRAG direct API configuration loaded from settings
 
 
 class HyperionError(Exception):
@@ -327,6 +335,123 @@ Confirm the deletion."""
                 doc_name=doc_name,
                 error=str(e)
             )
+    
+    async def upload_pdf(self, file_bytes: bytes, filename: str) -> UploadResult:
+        """
+        Upload a PDF file directly to LightRAG.
+        
+        Uses LightRAG's /documents/upload endpoint directly (not via AK)
+        for reliable binary file handling.
+        
+        Args:
+            file_bytes: PDF file content as bytes.
+            filename: Name for the uploaded file.
+        
+        Returns:
+            UploadResult with doc_id and track_id.
+        """
+        settings = get_settings()
+        
+        if not settings.lightrag_api_key:
+            return UploadResult(
+                success=False,
+                filename=filename,
+                status="failed",
+                error="LightRAG API key not configured. Set LIGHTRAG_API_KEY in environment.",
+            )
+        
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                # Prepare multipart form data
+                files = {
+                    "file": (filename, file_bytes, "application/pdf")
+                }
+                
+                response = await client.post(
+                    f"{settings.lightrag_url}/documents/upload",
+                    headers={
+                        "X-API-Key": settings.lightrag_api_key
+                    },
+                    files=files,
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # LightRAG returns status and potentially a track_id
+                    status = data.get("status", "unknown")
+                    
+                    return UploadResult(
+                        success=status in ["success", "duplicated", "processing"],
+                        filename=filename,
+                        doc_id=data.get("id"),
+                        track_id=data.get("track_id"),
+                        status=status,
+                        error=data.get("message") if status == "error" else None,
+                    )
+                else:
+                    error_text = response.text
+                    logger.error(f"LightRAG upload failed: {response.status_code} - {error_text}")
+                    return UploadResult(
+                        success=False,
+                        filename=filename,
+                        status="failed",
+                        error=f"HTTP {response.status_code}: {error_text}",
+                    )
+                    
+        except Exception as e:
+            logger.exception(f"Error uploading to LightRAG: {e}")
+            return UploadResult(
+                success=False,
+                filename=filename,
+                status="failed",
+                error=str(e),
+            )
+    
+    async def get_pipeline_status(self) -> PipelineStatus:
+        """
+        Get the current status of the LightRAG processing pipeline.
+        
+        Useful for checking if uploads are still being processed.
+        
+        Returns:
+            PipelineStatus with current processing state.
+        """
+        settings = get_settings()
+        
+        if not settings.lightrag_api_key:
+            logger.warning("LightRAG API key not configured, cannot check pipeline status")
+            return PipelineStatus()
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{settings.lightrag_url}/documents/pipeline_status",
+                    headers={
+                        "X-API-Key": settings.lightrag_api_key
+                    },
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return PipelineStatus(
+                        busy=data.get("busy", False),
+                        job_name=data.get("job_name"),
+                        job_start=data.get("job_start"),
+                        docs_count=data.get("docs", 0),
+                        batches=data.get("batchs", 0),
+                        current_batch=data.get("cur_batch", 0),
+                        latest_message=data.get("latest_message"),
+                        autoscanned=data.get("autoscanned", False),
+                        request_pending=data.get("request_pending", False),
+                    )
+                else:
+                    logger.warning(f"Pipeline status check failed: {response.status_code}")
+                    return PipelineStatus()
+                    
+        except Exception as e:
+            logger.exception(f"Error getting pipeline status: {e}")
+            return PipelineStatus()
 
 
 # Convenience functions for one-off operations
@@ -353,4 +478,16 @@ async def hyperion_delete(doc_name: str) -> DeleteResult:
     """Delete document from Hyperion (convenience function)."""
     async with HyperionClient() as client:
         return await client.delete(doc_name)
+
+
+async def hyperion_upload_pdf(file_bytes: bytes, filename: str) -> UploadResult:
+    """Upload PDF to LightRAG (convenience function)."""
+    async with HyperionClient() as client:
+        return await client.upload_pdf(file_bytes, filename)
+
+
+async def hyperion_pipeline_status() -> PipelineStatus:
+    """Get LightRAG pipeline status (convenience function)."""
+    async with HyperionClient() as client:
+        return await client.get_pipeline_status()
 

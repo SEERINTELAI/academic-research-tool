@@ -30,12 +30,15 @@ from src.models.outline import (
 from src.models.hyperion import (
     HyperionDocument,
     HyperionDocumentList,
+    DocumentStatus,
     IngestRequest,
     IngestResult,
     QueryRequest,
     QueryResult,
     ChunkReference,
     DeleteResult,
+    UploadResult,
+    PipelineStatus,
 )
 from src.models.source import (
     Author,
@@ -47,15 +50,6 @@ from src.models.source import (
     SourceResponse,
     SourceListItem,
     SourceIngestRequest,
-)
-from src.models.chunk import (
-    ChunkType,
-    ChunkMetadata,
-    ChunkCreate,
-    ChunkResponse,
-    ChunkWithContext,
-    ChunkForIngestion,
-    ChunkerConfig,
 )
 from src.models.research import (
     QueryMode,
@@ -92,12 +86,15 @@ __all__ = [
     # Hyperion
     "HyperionDocument",
     "HyperionDocumentList",
+    "DocumentStatus",
     "IngestRequest",
     "IngestResult",
     "QueryRequest",
     "QueryResult",
     "ChunkReference",
     "DeleteResult",
+    "UploadResult",
+    "PipelineStatus",
     # Source
     "Author",
     "IngestionStatus",
@@ -108,14 +105,6 @@ __all__ = [
     "SourceResponse",
     "SourceListItem",
     "SourceIngestRequest",
-    # Chunk
-    "ChunkType",
-    "ChunkMetadata",
-    "ChunkCreate",
-    "ChunkResponse",
-    "ChunkWithContext",
-    "ChunkForIngestion",
-    "ChunkerConfig",
     # Research
     "QueryMode",
     "CitationStyle",
@@ -126,4 +115,3 @@ __all__ = [
     "SynthesisResponse",
     "SynthesisListItem",
 ]
-
