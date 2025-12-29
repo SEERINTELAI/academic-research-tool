@@ -1204,31 +1204,74 @@ class ResearchAgent:
                 paper_index=i,
             ))
         
+        # Build additional lookup maps for DOI and arXiv
+        doi_to_source = {}
+        arxiv_to_source = {}
+        for paper in library_papers:
+            if paper.get("doi"):
+                doi_to_source[paper["doi"].lower()] = paper["id"]
+            if paper.get("arxiv_id"):
+                arxiv_to_source[paper["arxiv_id"].lower()] = paper["id"]
+        
         # Fetch references for each paper and create citation edges
         from src.services.semantic_scholar import SemanticScholarClient
         
         try:
             async with SemanticScholarClient() as ss_client:
                 for paper in library_papers:
-                    ss_id = paper.get("semantic_scholar_id")
-                    if not ss_id:
+                    # Try to find paper in Semantic Scholar using DOI or arXiv ID
+                    ss_paper_id = None
+                    doi = paper.get("doi")
+                    arxiv_id = paper.get("arxiv_id")
+                    
+                    if doi:
+                        ss_paper_id = f"DOI:{doi}"
+                    elif arxiv_id:
+                        ss_paper_id = f"ARXIV:{arxiv_id}"
+                    
+                    if not ss_paper_id:
                         continue
                     
                     try:
                         # Get references (papers this paper cites)
-                        references = await ss_client.get_paper_references(ss_id)
+                        references = await ss_client.get_paper_references(ss_paper_id)
                         
-                        # Create edges for references that are also in our library
-                        for ref_ss_id in references:
+                        if not references:
+                            continue
+                        
+                        # For each reference, check if it's in our library
+                        # We need to look up each reference to get its DOI/arXiv ID
+                        for ref_ss_id in references[:50]:  # Limit to 50 to avoid rate limits
+                            # Check if this SS ID is directly in our lookup
                             if ref_ss_id in ss_id_to_source:
-                                # This paper cites another paper in our library
                                 edges.append(TreeEdge(
-                                    source=paper["id"],  # Citing paper
-                                    target=ss_id_to_source[ref_ss_id],  # Cited paper
+                                    source=paper["id"],
+                                    target=ss_id_to_source[ref_ss_id],
                                     relationship="cites",
                                 ))
+                                continue
+                            
+                            # Try to get DOI/arXiv of the referenced paper
+                            try:
+                                ref_paper = await ss_client.get_paper(ref_ss_id)
+                                if ref_paper.doi and ref_paper.doi.lower() in doi_to_source:
+                                    edges.append(TreeEdge(
+                                        source=paper["id"],
+                                        target=doi_to_source[ref_paper.doi.lower()],
+                                        relationship="cites",
+                                    ))
+                                elif ref_paper.arxiv_id and ref_paper.arxiv_id.lower() in arxiv_to_source:
+                                    edges.append(TreeEdge(
+                                        source=paper["id"],
+                                        target=arxiv_to_source[ref_paper.arxiv_id.lower()],
+                                        relationship="cites",
+                                    ))
+                            except Exception:
+                                # Paper not found or rate limited
+                                continue
+                                
                     except Exception as e:
-                        logger.warning(f"Failed to get references for {ss_id}: {e}")
+                        logger.warning(f"Failed to get references for {ss_paper_id}: {e}")
                         continue
         except Exception as e:
             logger.warning(f"Failed to fetch citation data: {e}")
@@ -1483,6 +1526,8 @@ class ResearchAgent:
         sources = [n for n in nodes if n.node_type == NodeType.SOURCE]
         topics = [n for n in nodes if n.node_type == NodeType.TOPIC]
         
+        # Valid section_type enum values: introduction, literature_review, methods, 
+        # results, discussion, conclusion, abstract, custom
         outline = [
             {
                 "title": "Introduction",
@@ -1501,7 +1546,7 @@ class ResearchAgent:
             for topic_node in topics[:max_sections - 2]:
                 section = {
                     "title": topic_node.title,
-                    "type": "heading",
+                    "type": "custom",  # Use 'custom' for dynamic sections
                     "claims": [],
                 }
                 
@@ -1536,7 +1581,7 @@ class ResearchAgent:
                 for section_topic, papers in list(topics_map.items())[:max_sections - 2]:
                     section = {
                         "title": section_topic,
-                        "type": "heading",
+                        "type": "literature_review",
                         "claims": [],
                     }
                     
@@ -1566,7 +1611,7 @@ class ResearchAgent:
             if len(outline) == 1 and sources:
                 section = {
                     "title": "Literature Review",
-                    "type": "heading",
+                    "type": "literature_review",
                     "claims": [],
                 }
                 for source in sources[:max_sections * 2]:
