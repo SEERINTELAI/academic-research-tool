@@ -24,6 +24,11 @@ from src.services.semantic_scholar import (
     SemanticScholarClient,
     SemanticScholarError,
 )
+from src.services.multi_source_search import (
+    MultiSourceSearchService,
+    MultiSourceSearchResult,
+    SearchSource,
+)
 from src.services.ingestion import IngestionService, IngestionError
 
 logger = logging.getLogger(__name__)
@@ -70,6 +75,67 @@ async def search_papers(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Search API error: {e.message}",
+        )
+
+
+@router.post(
+    "/search/multi",
+    response_model=MultiSourceSearchResult,
+    summary="Search multiple sources",
+    description="Search multiple academic databases in parallel (OpenAlex, arXiv, PubMed, CrossRef, CORE).",
+)
+async def search_papers_multi(
+    project_id: UUID,
+    query: str = Query(..., min_length=1, max_length=1000, description="Search query"),
+    limit_per_source: int = Query(25, ge=1, le=100, description="Max results per source"),
+    sources: Optional[list[SearchSource]] = Query(
+        None,
+        description="Sources to search (default: openalex, arxiv, crossref)",
+    ),
+    year_from: Optional[int] = Query(None, description="Minimum publication year"),
+    year_to: Optional[int] = Query(None, description="Maximum publication year"),
+    deduplicate: bool = Query(True, description="Remove duplicates by DOI"),
+    user: CurrentUser = None,
+) -> MultiSourceSearchResult:
+    """
+    Search multiple academic paper databases in parallel.
+    
+    Available sources:
+    - **openalex**: Free, comprehensive, no rate limits (default)
+    - **arxiv**: CS, physics, math preprints
+    - **pubmed**: Biomedical and life sciences
+    - **crossref**: DOI registry, extensive metadata
+    - **core**: Open access papers (may require API key for full access)
+    - **semantic_scholar**: Comprehensive but strict rate limits
+    
+    Results are deduplicated by DOI and sorted by completeness of metadata.
+    """
+    try:
+        service = MultiSourceSearchService()
+        results = await service.search(
+            query=query,
+            sources=sources,
+            limit_per_source=limit_per_source,
+            year_from=year_from,
+            year_to=year_to,
+            deduplicate=deduplicate,
+        )
+        
+        logger.info(
+            f"Multi-source search '{query}' returned {results.total_results} results "
+            f"from {len(results.source_counts)} sources"
+        )
+        
+        if results.errors:
+            logger.warning(f"Search errors: {results.errors}")
+        
+        return results
+        
+    except Exception as e:
+        logger.exception(f"Multi-source search error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Search error: {str(e)}",
         )
 
 

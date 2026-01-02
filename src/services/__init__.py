@@ -30,6 +30,36 @@ from src.services.semantic_scholar import (
     SemanticScholarError,
     search_papers,
 )
+from src.services.openalex import (
+    OpenAlexClient,
+    OpenAlexError,
+)
+from src.services.arxiv import (
+    ArxivClient,
+    ArxivError,
+    search_arxiv,
+)
+from src.services.pubmed import (
+    PubMedClient,
+    PubMedError,
+    search_pubmed,
+)
+from src.services.crossref import (
+    CrossRefClient,
+    CrossRefError,
+    search_crossref,
+)
+from src.services.core import (
+    CoreClient,
+    CoreError,
+    search_core,
+)
+from src.services.multi_source_search import (
+    MultiSourceSearchService,
+    MultiSourceSearchResult,
+    SearchSource,
+    search_all_sources,
+)
 from src.services.pdf_processor import (
     PDFDownloader,
     PDFProcessorError,
@@ -79,6 +109,30 @@ __all__ = [
     "SemanticScholarClient",
     "SemanticScholarError",
     "search_papers",
+    # OpenAlex
+    "OpenAlexClient",
+    "OpenAlexError",
+    # arXiv
+    "ArxivClient",
+    "ArxivError",
+    "search_arxiv",
+    # PubMed
+    "PubMedClient",
+    "PubMedError",
+    "search_pubmed",
+    # CrossRef
+    "CrossRefClient",
+    "CrossRefError",
+    "search_crossref",
+    # CORE
+    "CoreClient",
+    "CoreError",
+    "search_core",
+    # Multi-Source Search
+    "MultiSourceSearchService",
+    "MultiSourceSearchResult",
+    "SearchSource",
+    "search_all_sources",
     # PDF Downloader
     "PDFDownloader",
     "PDFProcessorError",
